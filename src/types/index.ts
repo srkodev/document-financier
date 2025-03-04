@@ -23,6 +23,24 @@ export enum TransactionStatus {
   PROCESSING = "processing"
 }
 
+// Budget Category
+export interface BudgetCategory {
+  allocated: number;
+  spent: number;
+  description?: string;
+  lastUpdated?: string;
+}
+
+// Budget History Entry
+export interface BudgetHistoryEntry {
+  id: string;
+  user_id: string;
+  user_name?: string;
+  action: string;
+  details: string;
+  created_at: string;
+}
+
 // User Interface
 export interface User {
   id: string;
@@ -63,11 +81,11 @@ export interface Budget {
   totalAvailable: number;
   totalSpent: number;
   categories?: {
-    [key: string]: {
-      allocated: number;
-      spent: number;
-    };
+    [key: string]: BudgetCategory;
   };
+  fiscalYear?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Profile Interface
