@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { UserRole } from "@/types";
+import { useAuth } from "@/context/AuthContext";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -70,9 +71,10 @@ const navigationItems = [
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const isMobile = useIsMobile();
+  const { profile, signOut } = useAuth();
   
-  // In a real app, this would come from auth context
-  const userRole = UserRole.ADMIN;
+  // Récupérer le rôle de l'utilisateur du contexte d'authentification
+  const userRole = profile?.role || UserRole.AGENT;
   
   const filteredNavigationItems = navigationItems.filter(item => 
     item.roles.includes(userRole)
@@ -96,8 +98,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         )}
       >
         <div className="h-full flex flex-col">
+          {profile && (
+            <div className="px-4 py-2 border-b">
+              <p className="font-medium truncate">{profile.name || profile.email}</p>
+              <p className="text-xs text-muted-foreground">
+                {userRole === UserRole.SUPER_ADMIN ? "Super Administrateur" : 
+                 userRole === UserRole.ADMIN ? "Administrateur" :
+                 userRole === UserRole.RESP_POLE ? "Responsable de pôle" : "Agent"}
+              </p>
+            </div>
+          )}
+          
           <div className="px-4 py-4">
-            <p className="text-xs font-medium text-muted-foreground">MAIN MENU</p>
+            <p className="text-xs font-medium text-muted-foreground">MENU PRINCIPAL</p>
           </div>
           
           <nav className="space-y-1 px-2">
@@ -125,7 +138,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           
           <div className="mt-auto px-4">
             <Separator className="my-4" />
-            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive">
+            <Button variant="ghost" className="w-full justify-start gap-3 text-destructive" onClick={signOut}>
               <LogOut className="h-5 w-5" />
               <span>Déconnexion</span>
             </Button>

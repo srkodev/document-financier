@@ -1,10 +1,10 @@
 
 // User Roles
 export enum UserRole {
-  SUPER_ADMIN = "SuperAdmin",
-  ADMIN = "Admin",
-  RESP_POLE = "RespPôle",
-  AGENT = "Agent"
+  SUPER_ADMIN = "super_admin",
+  ADMIN = "admin",
+  RESP_POLE = "resp_pole",
+  AGENT = "agent"
 }
 
 // Invoice Status
@@ -35,11 +35,13 @@ export interface User {
 // Invoice Interface
 export interface Invoice {
   id: string;
-  userId: string;
+  number: string;
+  user_id: string;
   amount: number;
   status: InvoiceStatus;
-  createdAt: Date;
-  pdfUrl?: string;
+  created_at: string;
+  updated_at: string;
+  pdf_url?: string;
   description: string;
   category?: string;
 }
@@ -66,4 +68,15 @@ export interface Budget {
       spent: number;
     };
   };
+}
+
+// Profile Interface
+export interface Profile {
+  id: string;
+  email: string;
+  name: string | null;
+  role: UserRole;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
 }
