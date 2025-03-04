@@ -8,6 +8,9 @@ import Index from "./pages/Index";
 import Invoices from "./pages/Invoices";
 import Transactions from "./pages/Transactions";
 import Settings from "./pages/Settings";
+import Budget from "./pages/Budget";
+import Reports from "./pages/Reports";
+import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,10 +26,9 @@ const App = () => (
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/settings" element={<Settings />} />
-          {/* TODO: Implement these routes */}
-          <Route path="/budget" element={<NotFound />} />
-          <Route path="/reports" element={<NotFound />} />
-          <Route path="/users" element={<NotFound />} />
+          <Route path="/budget" element={<Budget />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/users" element={<Users />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

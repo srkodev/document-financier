@@ -10,6 +10,7 @@ interface StatusBadgeProps {
 }
 
 const statusConfig = {
+  // Invoice statuses
   [InvoiceStatus.PENDING]: {
     color: "bg-status-pending text-white",
     label: "En attente"
@@ -26,7 +27,8 @@ const statusConfig = {
     color: "bg-status-processing text-white",
     label: "En cours"
   },
-  [TransactionStatus.PENDING]: {
+  // Transaction statuses - using different keys to avoid duplicate property names
+  [TransactionStatus.PENDING + "_transaction"]: {
     color: "bg-status-pending text-white",
     label: "En attente"
   },
@@ -38,14 +40,19 @@ const statusConfig = {
     color: "bg-status-rejected text-white",
     label: "Annulé"
   },
-  [TransactionStatus.PROCESSING]: {
+  [TransactionStatus.PROCESSING + "_transaction"]: {
     color: "bg-status-processing text-white",
     label: "En cours"
   }
 };
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className }) => {
-  const config = statusConfig[status] || {
+  // Determine which key to use in the config based on the status
+  const configKey = Object.keys(statusConfig).includes(status) 
+    ? status 
+    : status + "_transaction";
+  
+  const config = statusConfig[configKey as keyof typeof statusConfig] || {
     color: "bg-gray-500 text-white",
     label: status
   };

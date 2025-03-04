@@ -1,93 +1,125 @@
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import DashboardSummary from "@/components/dashboard/DashboardSummary";
 import RecentTransactions from "@/components/dashboard/RecentTransactions";
 import BudgetOverview from "@/components/dashboard/BudgetOverview";
-import { InvoiceStatus, TransactionStatus } from "@/types";
+import { Budget, Transaction, InvoiceStatus, TransactionStatus } from "@/types";
 
 const Index = () => {
-  // Mock data (in a real app, this would come from an API)
-  const mockData = {
-    totalInvoices: 147,
-    pendingInvoices: 23,
-    totalSpent: 85600,
-    totalBudget: 120000,
-    recentTransactions: [
-      {
-        id: "tx1",
-        amount: -2500,
-        status: TransactionStatus.COMPLETED,
-        date: new Date(2023, 6, 15),
-        description: "Achat matériel informatique"
-      },
-      {
-        id: "tx2",
-        amount: -750,
-        status: TransactionStatus.PENDING,
-        date: new Date(2023, 6, 14),
-        description: "Frais de déplacement"
-      },
-      {
-        id: "tx3",
-        amount: 1200,
-        status: TransactionStatus.PROCESSING,
-        date: new Date(2023, 6, 12),
-        description: "Remboursement client"
-      },
-      {
-        id: "tx4",
-        amount: -320,
-        status: TransactionStatus.COMPLETED,
-        date: new Date(2023, 6, 10),
-        description: "Fournitures de bureau"
-      }
-    ],
-    budget: {
-      id: "budget1",
-      totalAvailable: 120000,
-      totalSpent: 85600,
-      categories: {
-        "Matériel": {
-          allocated: 50000,
-          spent: 42000
+  // State for data that would normally come from an API
+  const [isLoading, setIsLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState({
+    totalInvoices: 0,
+    pendingInvoices: 0,
+    totalSpent: 0,
+    totalBudget: 0
+  });
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [budgetData, setBudgetData] = useState<Budget>({
+    id: "budget1",
+    totalAvailable: 0,
+    totalSpent: 0,
+    categories: {}
+  });
+
+  // Mock API request to get dashboard data
+  useEffect(() => {
+    // Simulate API delay
+    const loadData = setTimeout(() => {
+      // Dashboard summary data
+      setDashboardData({
+        totalInvoices: 75,
+        pendingInvoices: 12,
+        totalSpent: 28000,
+        totalBudget: 50000
+      });
+
+      // Recent transactions
+      setRecentTransactions([
+        {
+          id: "TX001",
+          invoiceId: "INV001",
+          amount: -2500,
+          status: TransactionStatus.COMPLETED,
+          date: new Date(2023, 6, 15),
+          description: "Achat matériel informatique",
+          category: "Matériel"
         },
-        "Personnel": {
-          allocated: 30000,
-          spent: 23000
+        {
+          id: "TX002",
+          invoiceId: "INV002",
+          amount: -750,
+          status: TransactionStatus.PENDING,
+          date: new Date(2023, 6, 14),
+          description: "Frais de déplacement",
+          category: "Voyage"
         },
-        "Marketing": {
-          allocated: 25000,
-          spent: 15000
+        {
+          id: "TX003",
+          invoiceId: "INV003",
+          amount: 1200,
+          status: TransactionStatus.PROCESSING,
+          date: new Date(2023, 6, 12),
+          description: "Remboursement client",
+          category: "Remboursement"
         },
-        "Autres": {
-          allocated: 15000,
-          spent: 5600
+        {
+          id: "TX004",
+          invoiceId: "INV004",
+          amount: -320,
+          status: TransactionStatus.COMPLETED,
+          date: new Date(2023, 6, 10),
+          description: "Fournitures de bureau",
+          category: "Fournitures"
         }
-      }
-    }
-  };
+      ]);
+
+      // Budget data
+      setBudgetData({
+        id: "budget1",
+        totalAvailable: 50000,
+        totalSpent: 28000,
+        categories: {
+          "Matériel": { allocated: 20000, spent: 15000 },
+          "Voyages": { allocated: 15000, spent: 7000 },
+          "Fournitures": { allocated: 8000, spent: 4000 },
+          "Services": { allocated: 5000, spent: 2000 },
+          "Divers": { allocated: 2000, spent: 0 }
+        }
+      });
+
+      setIsLoading(false);
+    }, 1000);
+
+    // Cleanup function
+    return () => clearTimeout(loadData);
+  }, []);
 
   return (
     <DashboardLayout>
       <div className="animate-fade-in">
         <h1 className="text-3xl font-bold mb-6">Tableau de bord</h1>
         
-        <DashboardSummary
-          totalInvoices={mockData.totalInvoices}
-          pendingInvoices={mockData.pendingInvoices}
-          totalSpent={mockData.totalSpent}
-          totalBudget={mockData.totalBudget}
-        />
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <RecentTransactions transactions={mockData.recentTransactions} />
+        {isLoading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
-          <div>
-            <BudgetOverview budget={mockData.budget} />
-          </div>
-        </div>
+        ) : (
+          <>
+            <DashboardSummary 
+              totalInvoices={dashboardData.totalInvoices}
+              pendingInvoices={dashboardData.pendingInvoices}
+              totalSpent={dashboardData.totalSpent}
+              totalBudget={dashboardData.totalBudget}
+            />
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <RecentTransactions transactions={recentTransactions} />
+              <BudgetOverview budget={budgetData} />
+            </div>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );
