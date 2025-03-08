@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, FileUp, X } from "lucide-react";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useQuery } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -75,6 +75,7 @@ const ReimbursementForm: React.FC<ReimbursementFormProps> = ({
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [categories, setCategories] = useState<string[]>(["Matériel", "Fournitures", "Événement", "Transport", "Autre"]);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
 
   // Charger les catégories depuis la base de données
   useEffect(() => {
@@ -105,6 +106,12 @@ const ReimbursementForm: React.FC<ReimbursementFormProps> = ({
 
   const removeFile = (index: number) => {
     setFiles(files.filter((_, i) => i !== index));
+    const fileName = files[index].name;
+    setUploadProgress(prev => {
+      const newProgress = { ...prev };
+      delete newProgress[fileName];
+      return newProgress;
+    });
   };
 
   const onSubmit = async (values: FormValues) => {
@@ -137,7 +144,8 @@ const ReimbursementForm: React.FC<ReimbursementFormProps> = ({
           invoice_id: invoiceId,
           amount: values.amount,
           description: values.description,
-          status: "pending"
+          status: "pending",
+          category: values.category
         })
         .select()
         .single();
@@ -151,25 +159,70 @@ const ReimbursementForm: React.FC<ReimbursementFormProps> = ({
         const fileExt = file.name.split('.').pop();
         const filePath = `${user.id}/${request.id}/${crypto.randomUUID()}.${fileExt}`;
         
-        const { error: uploadError } = await supabase.storage
-          .from('reimbursement_attachments')
-          .upload(filePath, file);
-          
-        if (uploadError) {
-          throw new Error(`Erreur lors de l'upload du fichier ${file.name}`);
-        }
+        // Créer un objet FormData pour suivre la progression
+        const formData = new FormData();
+        formData.append('file', file);
         
-        const { data: urlData } = supabase.storage
-          .from('reimbursement_attachments')
-          .getPublicUrl(filePath);
-          
-        attachments.push({
-          reimbursement_id: request.id,
-          file_name: file.name,
-          file_type: file.type,
-          file_path: filePath,
-          file_url: urlData.publicUrl
-        });
+        // Suivre la progression de l'upload
+        const uploadFile = async () => {
+          try {
+            // Initialiser la progression
+            setUploadProgress(prev => ({
+              ...prev,
+              [file.name]: 0
+            }));
+            
+            // Simuler la progression de l'upload (car Supabase ne fournit pas d'API de progression)
+            const interval = setInterval(() => {
+              setUploadProgress(prev => {
+                const currentProgress = prev[file.name] || 0;
+                if (currentProgress < 90) {
+                  return { ...prev, [file.name]: currentProgress + 10 };
+                }
+                return prev;
+              });
+            }, 300);
+            
+            // Effectuer l'upload réel
+            const { error: uploadError } = await supabase.storage
+              .from('reimbursement_attachments')
+              .upload(filePath, file);
+              
+            clearInterval(interval);
+            
+            if (uploadError) {
+              setUploadProgress(prev => ({
+                ...prev,
+                [file.name]: -1 // -1 pour indiquer une erreur
+              }));
+              throw new Error(`Erreur lors de l'upload du fichier ${file.name}`);
+            }
+            
+            // Marquer comme terminé
+            setUploadProgress(prev => ({
+              ...prev,
+              [file.name]: 100
+            }));
+            
+            const { data: urlData } = supabase.storage
+              .from('reimbursement_attachments')
+              .getPublicUrl(filePath);
+              
+            return {
+              reimbursement_id: request.id,
+              file_name: file.name,
+              file_type: file.type,
+              file_path: filePath,
+              file_url: urlData.publicUrl
+            };
+          } catch (err) {
+            console.error(`Erreur d'upload pour ${file.name}:`, err);
+            throw err;
+          }
+        };
+        
+        const attachment = await uploadFile();
+        attachments.push(attachment);
       }
       
       // 4. Save file references
@@ -208,6 +261,9 @@ const ReimbursementForm: React.FC<ReimbursementFormProps> = ({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Nouvelle demande de remboursement</DialogTitle>
+          <DialogDescription>
+            Remplissez le formulaire et joignez les justificatifs nécessaires pour votre demande.
+          </DialogDescription>
         </DialogHeader>
         
         <Form {...form}>
@@ -285,20 +341,35 @@ const ReimbursementForm: React.FC<ReimbursementFormProps> = ({
               
               {files.length > 0 && (
                 <div className="mt-2 space-y-2">
-                  {files.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between bg-muted p-2 rounded">
-                      <div className="flex items-center gap-2 text-sm">
-                        <FileUp className="h-4 w-4" />
-                        <span className="truncate max-w-[200px]">{file.name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {(file.size / 1024).toFixed(0)} KB
-                        </Badge>
+                  {files.map((file, index) => {
+                    const progress = uploadProgress[file.name] || 0;
+                    return (
+                      <div key={index} className="flex items-center justify-between bg-muted p-2 rounded">
+                        <div className="flex items-center gap-2 text-sm">
+                          <FileUp className="h-4 w-4" />
+                          <span className="truncate max-w-[200px]">{file.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {(file.size / 1024).toFixed(0)} KB
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {progress > 0 && progress < 100 && (
+                            <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${
+                                  progress < 0 ? 'bg-red-500' : 'bg-primary'
+                                }`}
+                                style={{ width: `${progress < 0 ? 100 : progress}%` }}
+                              ></div>
+                            </div>
+                          )}
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeFile(index)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeFile(index)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <p className="text-xs text-muted-foreground">Formats acceptés: PDF, JPG, PNG, DOC, DOCX</p>

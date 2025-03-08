@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -28,6 +29,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { TransactionStatus } from "@/types";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const formSchema = z.object({
   description: z.string().min(3, "La description doit contenir au moins 3 caractères"),
@@ -46,9 +48,17 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface TransactionFormProps {
   transactionId?: string;
+  onSuccess?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
+const TransactionForm: React.FC<TransactionFormProps> = ({ 
+  transactionId, 
+  onSuccess, 
+  open, 
+  onOpenChange 
+}) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -154,7 +164,52 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
         });
       }
 
-      navigate("/transactions");
+      // Mise à jour du budget global
+      if (values.category) {
+        try {
+          // Récupérer le budget actuel
+          const { data: budgetData, error: budgetError } = await supabase
+            .from("budgets")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+
+          if (!budgetError && budgetData) {
+            // Mettre à jour le budget de la catégorie
+            const categories = budgetData.categories || {};
+            if (categories[values.category]) {
+              categories[values.category].spent = 
+                (parseFloat(categories[values.category].spent) || 0) + Number(values.amount);
+              categories[values.category].lastUpdated = new Date().toISOString();
+            }
+
+            // Mettre à jour le budget total dépensé
+            const totalSpent = (parseFloat(budgetData.total_spent) || 0) + Number(values.amount);
+
+            // Enregistrer les modifications
+            await supabase
+              .from("budgets")
+              .update({
+                total_spent: totalSpent,
+                categories: categories
+              })
+              .eq("id", budgetData.id);
+          }
+        } catch (budgetError) {
+          console.error("Erreur lors de la mise à jour du budget:", budgetError);
+        }
+      }
+
+      form.reset();
+      if (onSuccess) {
+        onSuccess();
+      }
+      if (onOpenChange) {
+        onOpenChange(false);
+      } else {
+        navigate("/transactions");
+      }
     } catch (error: any) {
       toast({
         title: "Error",
@@ -166,6 +221,165 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
     }
   };
 
+  // Si c'est utilisé comme une modal
+  if (open !== undefined && onOpenChange) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>{transactionId ? "Modifier la transaction" : "Nouvelle transaction"}</DialogTitle>
+          </DialogHeader>
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Description de la transaction..." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Montant</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="0.00" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Catégorie</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner une catégorie" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {categories.map((category) => (
+                          <SelectItem key={category} value={category}>{category}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Date</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Sélectionner une date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date > new Date()
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Statut</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un statut" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={TransactionStatus.PENDING}>En attente</SelectItem>
+                        <SelectItem value={TransactionStatus.COMPLETED}>Complété</SelectItem>
+                        <SelectItem value={TransactionStatus.CANCELLED}>Annulé</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="invoiceId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ID Facture (Optionnel)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Entrez l'ID de la facture" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button type="submit" disabled={isSubmitting} className="w-full">
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Veuillez patienter
+                  </>
+                ) : (
+                  "Soumettre"
+                )}
+              </Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Rendu normal pour une page complète
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -176,7 +390,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea placeholder="Transaction description..." {...field} />
+                <Textarea placeholder="Description de la transaction..." {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -188,7 +402,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
           name="amount"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Amount</FormLabel>
+              <FormLabel>Montant</FormLabel>
               <FormControl>
                 <Input type="number" placeholder="0.00" {...field} />
               </FormControl>
@@ -202,11 +416,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
           name="category"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Category</FormLabel>
+              <FormLabel>Catégorie</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a category" />
+                    <SelectValue placeholder="Sélectionner une catégorie" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -239,7 +453,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
                       {field.value ? (
                         format(field.value, "PPP")
                       ) : (
-                        <span>Pick a date</span>
+                        <span>Sélectionner une date</span>
                       )}
                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                     </Button>
@@ -267,17 +481,17 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
           name="status"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Status</FormLabel>
+              <FormLabel>Statut</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a status" />
+                    <SelectValue placeholder="Sélectionner un statut" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value={TransactionStatus.PENDING}>Pending</SelectItem>
-                  <SelectItem value={TransactionStatus.COMPLETED}>Completed</SelectItem>
-                  <SelectItem value={TransactionStatus.CANCELLED}>Cancelled</SelectItem>
+                  <SelectItem value={TransactionStatus.PENDING}>En attente</SelectItem>
+                  <SelectItem value={TransactionStatus.COMPLETED}>Complété</SelectItem>
+                  <SelectItem value={TransactionStatus.CANCELLED}>Annulé</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -290,9 +504,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
           name="invoiceId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Invoice ID (Optional)</FormLabel>
+              <FormLabel>ID Facture (Optionnel)</FormLabel>
               <FormControl>
-                <Input placeholder="Enter invoice ID" {...field} />
+                <Input placeholder="Entrez l'ID de la facture" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -303,10 +517,10 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Please wait
+              Veuillez patienter
             </>
           ) : (
-            "Submit"
+            "Soumettre"
           )}
         </Button>
       </form>

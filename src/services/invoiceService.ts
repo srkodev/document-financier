@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Invoice, InvoiceStatus } from "@/types";
 import { generateInvoicePDF } from "@/services/pdfService";
@@ -48,16 +47,77 @@ export const updateInvoiceStatus = async (id: string, status: InvoiceStatus) => 
 };
 
 export const deleteInvoice = async (id: string) => {
-  const { error } = await supabase
-    .from("invoices")
-    .delete()
-    .eq("id", id);
+  try {
+    // Vérifier si la facture a un lien vers un fichier PDF
+    const { data: invoice, error: getError } = await supabase
+      .from("invoices")
+      .select("pdf_url")
+      .eq("id", id)
+      .single();
+      
+    if (getError) {
+      throw new Error(getError.message);
+    }
+    
+    // Supprimer le fichier PDF si présent
+    if (invoice?.pdf_url) {
+      // Extraire le chemin du fichier à partir de l'URL
+      const url = new URL(invoice.pdf_url);
+      const pathSegments = url.pathname.split('/');
+      // Les deux derniers segments devraient être le bucket et le nom du fichier
+      if (pathSegments.length >= 2) {
+        const filePath = pathSegments[pathSegments.length - 1];
+        
+        // Supprimer le fichier du bucket
+        await supabase.storage
+          .from('invoices')
+          .remove([filePath]);
+      }
+    }
+    
+    // Vérifier s'il existe des remboursements liés à cette facture
+    const { data: reimbursements } = await supabase
+      .from("reimbursement_requests")
+      .select("id")
+      .eq("invoice_id", id);
+      
+    if (reimbursements && reimbursements.length > 0) {
+      // Mettre à jour les remboursements pour les déconnecter de cette facture
+      await supabase
+        .from("reimbursement_requests")
+        .update({ invoice_id: null })
+        .eq("invoice_id", id);
+    }
+    
+    // Vérifier s'il existe des transactions liées à cette facture
+    const { data: transactions } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("invoice_id", id);
+      
+    if (transactions && transactions.length > 0) {
+      // Mettre à jour les transactions pour les déconnecter de cette facture
+      await supabase
+        .from("transactions")
+        .update({ invoice_id: null })
+        .eq("invoice_id", id);
+    }
+  
+    // Supprimer la facture elle-même
+    const { error } = await supabase
+      .from("invoices")
+      .delete()
+      .eq("id", id);
 
-  if (error) {
-    throw new Error(error.message);
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error("Erreur lors de la suppression de la facture:", error);
+    throw error;
   }
-
-  return true;
 };
 
 export const exportInvoicesToCSV = (invoices: Invoice[]) => {

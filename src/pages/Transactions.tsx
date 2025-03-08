@@ -1,19 +1,10 @@
 
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { format } from "date-fns";
-import { Plus, Edit, Trash2, Filter, Download } from "lucide-react";
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,250 +14,237 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Transaction, TransactionStatus } from "@/types";
 import { fetchTransactions, deleteTransaction } from "@/services/transactionService";
-import { fetchCategories } from "@/services/categoryService";
+import { CalendarIcon, Edit, Trash, Plus } from "lucide-react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { TransactionStatus, Transaction } from "@/types";
 import { useToast } from "@/hooks/use-toast";
-import StatusBadge from "@/components/ui-custom/StatusBadge";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import TransactionForm from "@/components/transactions/TransactionForm";
 
-const Transactions = () => {
-  const navigate = useNavigate();
+const TransactionsPage: React.FC = () => {
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
-  const queryClient = useQueryClient();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("all");
 
-  // Fetch transactions with React Query
-  const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
-    queryKey: ['transactions'],
+  const { data: transactions = [], isLoading, refetch } = useQuery({
+    queryKey: ["transactions"],
     queryFn: fetchTransactions,
-    meta: {
-      onError: (error: Error) => {
-        console.error("Error loading transactions:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load transactions data",
-          variant: "destructive",
-        });
-      }
-    }
   });
 
-  // Fetch categories with React Query
-  const { data: categoriesData = [], isLoading: categoriesLoading } = useQuery({
-    queryKey: ['categories'],
-    queryFn: fetchCategories,
-    meta: {
-      onError: (error: Error) => {
-        console.error("Error loading categories:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load categories",
-          variant: "destructive",
-        });
-      }
-    }
-  });
+  const handleEdit = (id: string) => {
+    setEditingTransactionId(id);
+    setIsFormOpen(true);
+  };
 
-  const categories = categoriesData.map(cat => cat.name);
+  const handleDelete = (id: string) => {
+    setSelectedTransactionId(id);
+    setIsDeleteDialogOpen(true);
+  };
 
-  // Delete transaction mutation
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteTransaction(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+  const confirmDelete = async () => {
+    if (!selectedTransactionId) return;
+
+    try {
+      await deleteTransaction(selectedTransactionId);
       toast({
-        title: "Success",
-        description: "Transaction deleted successfully",
+        title: "Transaction supprimée",
+        description: "La transaction a été supprimée avec succès",
       });
-      setTransactionToDelete(null);
-    },
-    onError: (error) => {
-      console.error("Error deleting transaction:", error);
+      refetch();
+    } catch (error: any) {
       toast({
-        title: "Error",
-        description: "Failed to delete transaction",
+        title: "Erreur",
+        description: error.message || "Une erreur est survenue lors de la suppression",
         variant: "destructive",
       });
-      setTransactionToDelete(null);
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setSelectedTransactionId(null);
     }
+  };
+
+  const addNewTransaction = () => {
+    setEditingTransactionId(null);
+    setIsFormOpen(true);
+  };
+
+  const onFormSuccess = () => {
+    refetch();
+    setIsFormOpen(false);
+  };
+
+  const filteredTransactions = transactions.filter((transaction) => {
+    if (activeTab === "all") return true;
+    return transaction.status === activeTab;
   });
 
-  const handleDeleteTransaction = (id: string) => {
-    deleteMutation.mutate(id);
+  const getStatusBadgeClass = (status: TransactionStatus) => {
+    switch (status) {
+      case TransactionStatus.COMPLETED:
+        return "bg-green-100 text-green-800";
+      case TransactionStatus.CANCELLED:
+        return "bg-red-100 text-red-800";
+      case TransactionStatus.PENDING:
+      default:
+        return "bg-yellow-100 text-yellow-800";
+    }
   };
-
-  const filterTransactions = () => {
-    return transactions.filter((transaction: Transaction) => {
-      const matchesSearch = searchTerm === "" || 
-        transaction.description.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesCategory = categoryFilter === "" || 
-        transaction.category === categoryFilter;
-      
-      // Fixed type error by explicitly type casting
-      const matchesStatus = statusFilter === "" || 
-        transaction.status === statusFilter as TransactionStatus;
-      
-      return matchesSearch && matchesCategory && matchesStatus;
-    });
-  };
-
-  const filteredTransactions = filterTransactions();
-  const isLoading = transactionsLoading || categoriesLoading;
 
   return (
     <DashboardLayout>
-      <div className="animate-fade-in space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Transactions</h1>
-            <p className="text-muted-foreground">
-              Manage and track all financial transactions
-            </p>
-          </div>
-          <Button onClick={() => navigate("/transactions/new")} className="gap-2">
+      <div className="container mx-auto py-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Transactions</h1>
+          <Button onClick={addNewTransaction} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            <span>Add Transaction</span>
+            Nouvelle transaction
           </Button>
         </div>
 
-        <Card className="p-6">
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <div className="flex-1">
-              <Input
-                placeholder="Search transactions..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            <div className="w-full md:w-48">
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all-categories">All Categories</SelectItem>
-                  {categories.map((category: string) => (
-                    <SelectItem key={category} value={category}>{category}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-full md:w-48">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all-statuses">All Statuses</SelectItem>
-                  <SelectItem value={TransactionStatus.PENDING}>Pending</SelectItem>
-                  <SelectItem value={TransactionStatus.COMPLETED}>Completed</SelectItem>
-                  <SelectItem value={TransactionStatus.CANCELLED}>Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="outline" className="gap-2">
-              <Filter className="h-4 w-4" />
-              <span className="hidden md:inline">Filter</span>
-            </Button>
-            <Button variant="outline" className="gap-2">
-              <Download className="h-4 w-4" />
-              <span className="hidden md:inline">Export</span>
-            </Button>
-          </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Liste des transactions</CardTitle>
+            <CardDescription>Historique de toutes les transactions financières</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="all" onValueChange={setActiveTab} className="w-full">
+              <TabsList className="mb-4">
+                <TabsTrigger value="all">Toutes</TabsTrigger>
+                <TabsTrigger value={TransactionStatus.PENDING}>En attente</TabsTrigger>
+                <TabsTrigger value={TransactionStatus.COMPLETED}>Terminées</TabsTrigger>
+                <TabsTrigger value={TransactionStatus.CANCELLED}>Annulées</TabsTrigger>
+              </TabsList>
 
-          {isLoading ? (
-            <div className="text-center py-8">Loading transactions...</div>
-          ) : filteredTransactions.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No transactions found</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTransactions.map((transaction: Transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>
-                        {format(new Date(transaction.date), 'dd/MM/yyyy')}
-                      </TableCell>
-                      <TableCell>{transaction.description}</TableCell>
-                      <TableCell>{transaction.category || 'Uncategorized'}</TableCell>
-                      <TableCell>
-                        {new Intl.NumberFormat('fr-FR', {
-                          style: 'currency',
-                          currency: 'EUR',
-                        }).format(Number(transaction.amount))}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={transaction.status} />
-                      </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => navigate(`/transactions/${transaction.id}/edit`)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog open={transactionToDelete === transaction.id} onOpenChange={(open) => !open && setTransactionToDelete(null)}>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setTransactionToDelete(transaction.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete this transaction? This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction 
-                                onClick={() => handleDeleteTransaction(transaction.id)}
-                                className="bg-red-500 hover:bg-red-600"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+              <TabsContent value="all" className="mt-0">
+                {renderTransactionsTable()}
+              </TabsContent>
+              <TabsContent value={TransactionStatus.PENDING} className="mt-0">
+                {renderTransactionsTable()}
+              </TabsContent>
+              <TabsContent value={TransactionStatus.COMPLETED} className="mt-0">
+                {renderTransactionsTable()}
+              </TabsContent>
+              <TabsContent value={TransactionStatus.CANCELLED} className="mt-0">
+                {renderTransactionsTable()}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
         </Card>
       </div>
+
+      <TransactionForm
+        open={isFormOpen}
+        onOpenChange={setIsFormOpen}
+        transactionId={editingTransactionId || undefined}
+        onSuccess={onFormSuccess}
+      />
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Êtes-vous sûr ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action ne peut pas être annulée. Cela supprimera définitivement la transaction.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground">
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
+
+  function renderTransactionsTable() {
+    if (isLoading) {
+      return (
+        <div className="flex justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      );
+    }
+
+    if (filteredTransactions.length === 0) {
+      return (
+        <div className="py-8 text-center">
+          <p className="text-muted-foreground">Aucune transaction trouvée</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b">
+              <th className="py-3 px-4 text-left font-medium text-muted-foreground">Description</th>
+              <th className="py-3 px-4 text-left font-medium text-muted-foreground">Montant</th>
+              <th className="py-3 px-4 text-left font-medium text-muted-foreground">Catégorie</th>
+              <th className="py-3 px-4 text-left font-medium text-muted-foreground">Date</th>
+              <th className="py-3 px-4 text-left font-medium text-muted-foreground">Statut</th>
+              <th className="py-3 px-4 text-left font-medium text-muted-foreground">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredTransactions.map((transaction) => (
+              <tr key={transaction.id} className="hover:bg-muted/50">
+                <td className="py-3 px-4 align-top">{transaction.description}</td>
+                <td className="py-3 px-4 font-medium">
+                  {parseFloat(transaction.amount.toString()).toFixed(2)} €
+                </td>
+                <td className="py-3 px-4">{transaction.category || "-"}</td>
+                <td className="py-3 px-4">
+                  <div className="flex items-center gap-1">
+                    <CalendarIcon className="h-3 w-3 text-muted-foreground" />
+                    <span>{format(new Date(transaction.date), "dd MMMM yyyy", { locale: fr })}</span>
+                  </div>
+                </td>
+                <td className="py-3 px-4">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(
+                      transaction.status
+                    )}`}
+                  >
+                    {transaction.status === TransactionStatus.COMPLETED
+                      ? "Terminée"
+                      : transaction.status === TransactionStatus.CANCELLED
+                      ? "Annulée"
+                      : "En attente"}
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEdit(transaction.id)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(transaction.id)}
+                    >
+                      <Trash className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 };
 
-export default Transactions;
+export default TransactionsPage;
