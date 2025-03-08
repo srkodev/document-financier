@@ -15,7 +15,7 @@ const statusConfig = {
     color: "bg-status-pending text-white",
     label: "En attente"
   },
-  [InvoiceStatus.APPROVED]: {
+  [InvoiceStatus.PAID]: {
     color: "bg-status-approved text-white",
     label: "Approuvé"
   },
@@ -23,19 +23,11 @@ const statusConfig = {
     color: "bg-status-rejected text-white",
     label: "Refusé"
   },
-  [InvoiceStatus.PROCESSING]: {
-    color: "bg-status-processing text-white",
-    label: "En cours"
-  },
-  [InvoiceStatus.PAID]: {
-    color: "bg-status-approved text-white",
-    label: "Payé"
-  },
   [InvoiceStatus.DRAFT]: {
     color: "bg-gray-500 text-white",
     label: "Brouillon"
   },
-  // Transaction statuses - using different keys to avoid duplicates
+  // Transaction statuses
   [TransactionStatus.PENDING]: {
     color: "bg-status-pending text-white",
     label: "En attente"
@@ -47,10 +39,6 @@ const statusConfig = {
   [TransactionStatus.CANCELLED]: {
     color: "bg-status-rejected text-white",
     label: "Annulé"
-  },
-  [TransactionStatus.PROCESSING]: {
-    color: "bg-status-processing text-white",
-    label: "En cours"
   }
 };
 

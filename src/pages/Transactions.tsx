@@ -112,7 +112,7 @@ const Transactions = () => {
         transaction.category === categoryFilter;
       
       const matchesStatus = statusFilter === "" || 
-        transaction.status === statusFilter;
+        transaction.status === statusFilter as TransactionStatus;
       
       return matchesSearch && matchesCategory && matchesStatus;
     });
