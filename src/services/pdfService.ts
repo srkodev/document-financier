@@ -1,252 +1,214 @@
 
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-import { Invoice, InvoiceStatus } from "@/types";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Invoice, InvoiceStatus } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { formatDate } from '@/lib/utils';
 
-type InvoiceItem = {
-  name: string;
-  description?: string;
-  quantity: number;
-  priceHT: number;
-  vatRate: number;
-};
-
-export const generateInvoicePDF = (
-  invoice: Invoice,
-  items: InvoiceItem[],
-  companyInfo: {
-    name: string;
-    address: string;
-    postalCode: string;
-    city: string;
-    phone?: string;
-    email?: string;
-    website?: string;
-    siret: string;
-    vatNumber?: string;
-    logoUrl?: string;
-  },
-  clientInfo: {
-    name: string;
-    address: string;
-    postalCode: string;
-    city: string;
-    email?: string;
-    vatNumber?: string;
-  }
-): string => {
-  // Créer un nouveau document PDF avec orientation portrait, unité mm, format A4
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-  });
-
-  // Définir les couleurs et styles
-  const primaryColor = [41, 98, 255]; // RGB pour le bleu primary
-  const textColor = [51, 51, 51]; // Gris foncé
-  const secondaryColor = [243, 244, 246]; // Gris très clair pour les fonds
-
-  // Dimensions et marges
-  const pageWidth = doc.internal.pageSize.width;
-  const pageHeight = doc.internal.pageSize.height;
-  const margin = 15;
-
-  // Ajouter un en-tête avec le logo si disponible
-  if (companyInfo.logoUrl) {
-    try {
-      doc.addImage(companyInfo.logoUrl, "JPEG", margin, margin, 40, 20);
-    } catch (error) {
-      console.error("Error adding logo:", error);
+// Fonction pour générer un PDF pour une facture
+export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
+  try {
+    const doc = new jsPDF();
+    
+    // Configuration de la page
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - margin * 2;
+    let yPos = 20;
+    
+    // En-tête du document
+    doc.setFontSize(18);
+    doc.setTextColor(0, 0, 0);
+    doc.text("FACTURE", pageWidth / 2, yPos, { align: "center" });
+    
+    yPos += 10;
+    doc.setFontSize(12);
+    doc.text(`N° ${invoice.number}`, pageWidth / 2, yPos, { align: "center" });
+    
+    yPos += 15;
+    
+    // Informations de l'entreprise
+    doc.setFontSize(10);
+    doc.text("ÉMETTEUR", margin, yPos);
+    yPos += 5;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Votre Entreprise", margin, yPos);
+    yPos += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("123 Rue de la Facturation", margin, yPos);
+    yPos += 5;
+    doc.text("75000 Paris, France", margin, yPos);
+    yPos += 5;
+    doc.text("contact@votreentreprise.fr", margin, yPos);
+    yPos += 5;
+    doc.text("SIRET: 123 456 789 00012", margin, yPos);
+    yPos += 5;
+    doc.text("TVA Intracom: FR12345678900", margin, yPos);
+    
+    // Informations du client
+    yPos = 60;
+    doc.setFontSize(10);
+    doc.text("DESTINATAIRE", pageWidth - margin - 80, yPos);
+    yPos += 5;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Client", pageWidth - margin - 80, yPos);
+    yPos += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Prénom Nom", pageWidth - margin - 80, yPos);
+    yPos += 5;
+    doc.text("Adresse du client", pageWidth - margin - 80, yPos);
+    yPos += 5;
+    doc.text("Code postal, Ville", pageWidth - margin - 80, yPos);
+    
+    // Informations sur la facture
+    yPos = 90;
+    doc.setFontSize(10);
+    
+    const dateFacture = invoice.created_at ? formatDate(new Date(invoice.created_at)) : "N/A";
+    const dateEcheance = invoice.created_at 
+      ? formatDate(new Date(new Date(invoice.created_at).setMonth(new Date(invoice.created_at).getMonth() + 1)))
+      : "N/A";
+    
+    doc.text(`Date de facturation: ${dateFacture}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Date d'échéance: ${dateEcheance}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Statut: ${translateStatus(invoice.status)}`, margin, yPos);
+    
+    yPos += 15;
+    
+    // Description de la facture
+    doc.setFontSize(11);
+    doc.text(`Description: ${invoice.description || "N/A"}`, margin, yPos);
+    
+    yPos += 15;
+    
+    // Tableau des détails
+    const tableHeaders = [["Description", "Montant HT", "TVA", "Montant TTC"]];
+    const tableRows = [[
+      invoice.description || "Services",
+      `${(invoice.amount / 1.2).toFixed(2)} €`,
+      "20%",
+      `${invoice.amount.toFixed(2)} €`
+    ]];
+    
+    autoTable(doc, {
+      head: tableHeaders,
+      body: tableRows,
+      startY: yPos,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      styles: { halign: "center" },
+      columnStyles: { 0: { halign: "left" } }
+    });
+    
+    yPos = (doc as any).lastAutoTable.finalY + 20;
+    
+    // Récapitulatif des montants
+    doc.setFontSize(10);
+    doc.text("Total HT:", pageWidth - margin - 60, yPos);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${(invoice.amount / 1.2).toFixed(2)} €`, pageWidth - margin, yPos, { align: "right" });
+    
+    yPos += 7;
+    doc.setFont("helvetica", "normal");
+    doc.text("TVA (20%):", pageWidth - margin - 60, yPos);
+    doc.text(`${(invoice.amount - invoice.amount / 1.2).toFixed(2)} €`, pageWidth - margin, yPos, { align: "right" });
+    
+    yPos += 7;
+    doc.setFont("helvetica", "bold");
+    doc.text("Total TTC:", pageWidth - margin - 60, yPos);
+    doc.text(`${invoice.amount.toFixed(2)} €`, pageWidth - margin, yPos, { align: "right" });
+    
+    // Conditions de paiement
+    yPos += 20;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("Conditions de paiement:", margin, yPos);
+    yPos += 5;
+    doc.text("Paiement à effectuer sous 30 jours à compter de la date de facturation.", margin, yPos);
+    yPos += 5;
+    doc.text("Virement bancaire sur le compte: FR76 1234 5678 9012 3456 7890 123 - BIC: CEPAFRPP123", margin, yPos);
+    
+    // Mentions légales
+    yPos = doc.internal.pageSize.getHeight() - 30;
+    doc.setFontSize(8);
+    doc.text("En cas de retard de paiement, une pénalité de 3 fois le taux d'intérêt légal sera appliquée.", margin, yPos);
+    yPos += 4;
+    doc.text("Une indemnité forfaitaire de 40€ pour frais de recouvrement sera due en cas de retard (Article L.441-6 du Code de Commerce).", margin, yPos);
+    yPos += 4;
+    doc.text("Dispensé d'immatriculation au registre du commerce et des sociétés (RCS) et au répertoire des métiers (RM).", margin, yPos);
+    
+    // Convertir le document en blob
+    const pdfBlob = doc.output('blob');
+    
+    // Si la facture n'a pas encore d'URL PDF, on peut l'enregistrer sur Supabase Storage
+    // et mettre à jour l'enregistrement de la facture
+    if (!invoice.pdf_url) {
+      try {
+        const user = await supabase.auth.getUser();
+        if (!user.data.user) throw new Error("Utilisateur non authentifié");
+        
+        const filename = `factures/${user.data.user.id}/${invoice.id}.pdf`;
+        
+        const { data, error } = await supabase.storage
+          .from('documents')
+          .upload(filename, pdfBlob, {
+            contentType: 'application/pdf',
+            upsert: true
+          });
+        
+        if (error) {
+          console.error("Erreur lors de l'upload du PDF:", error);
+        } else {
+          // Obtenir l'URL du fichier
+          const { data: urlData } = supabase.storage
+            .from('documents')
+            .getPublicUrl(filename);
+          
+          // Mettre à jour l'enregistrement de la facture avec l'URL du PDF
+          const { error: updateError } = await supabase
+            .from('invoices')
+            .update({ pdf_url: urlData.publicUrl })
+            .eq('id', invoice.id);
+          
+          if (updateError) {
+            console.error("Erreur lors de la mise à jour de la facture:", updateError);
+          }
+        }
+      } catch (error) {
+        console.error("Erreur lors de l'enregistrement du PDF:", error);
+      }
     }
+    
+    return pdfBlob;
+  } catch (error) {
+    console.error("Erreur lors de la génération du PDF:", error);
+    throw error;
   }
-
-  // En-tête - Informations de l'entreprise
-  doc.setFontSize(18);
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.setFont("helvetica", "bold");
-  doc.text(companyInfo.name, pageWidth - margin, margin, { align: "right" });
-
-  doc.setFontSize(10);
-  doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-  doc.setFont("helvetica", "normal");
-  doc.text(companyInfo.address, pageWidth - margin, margin + 7, { align: "right" });
-  doc.text(
-    `${companyInfo.postalCode} ${companyInfo.city}`,
-    pageWidth - margin,
-    margin + 12,
-    { align: "right" }
-  );
-  if (companyInfo.phone) {
-    doc.text(`Tél: ${companyInfo.phone}`, pageWidth - margin, margin + 17, {
-      align: "right",
-    });
-  }
-  if (companyInfo.email) {
-    doc.text(`Email: ${companyInfo.email}`, pageWidth - margin, margin + 22, {
-      align: "right",
-    });
-  }
-  doc.text(`SIRET: ${companyInfo.siret}`, pageWidth - margin, margin + 27, {
-    align: "right",
-  });
-  if (companyInfo.vatNumber) {
-    doc.text(`TVA: ${companyInfo.vatNumber}`, pageWidth - margin, margin + 32, {
-      align: "right",
-    });
-  }
-
-  // Titre du document
-  doc.setFontSize(24);
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.setFont("helvetica", "bold");
-  doc.text("FACTURE", margin, margin + 40);
-
-  // Numéro de facture et date
-  doc.setFontSize(12);
-  doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-  doc.text(`Facture N° ${invoice.number}`, margin, margin + 50);
-  doc.text(
-    `Date: ${format(new Date(invoice.created_at), "dd MMMM yyyy", { locale: fr })}`,
-    margin,
-    margin + 56
-  );
-  
-  // Statut de la facture
-  let statusText = "En attente";
-  if (invoice.status === InvoiceStatus.APPROVED) {
-    statusText = "Approuvée";
-  } else if (invoice.status === InvoiceStatus.REJECTED) {
-    statusText = "Rejetée";
-  } else if (invoice.status === InvoiceStatus.PROCESSING) {
-    statusText = "En traitement";
-  }
-  
-  doc.text(`Statut: ${statusText}`, margin, margin + 62);
-
-  // Informations du client
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text("Informations client", margin, margin + 75);
-  doc.setFont("helvetica", "normal");
-  doc.text(clientInfo.name, margin, margin + 82);
-  doc.text(clientInfo.address, margin, margin + 88);
-  doc.text(`${clientInfo.postalCode} ${clientInfo.city}`, margin, margin + 94);
-  if (clientInfo.email) {
-    doc.text(`Email: ${clientInfo.email}`, margin, margin + 100);
-  }
-  if (clientInfo.vatNumber) {
-    doc.text(`TVA: ${clientInfo.vatNumber}`, margin, margin + 106);
-  }
-
-  // Tableau des articles
-  const tableStartY = margin + 120;
-  const tableData = items.map((item) => [
-    item.name,
-    item.description || "",
-    item.quantity.toString(),
-    `${item.priceHT.toFixed(2)} €`,
-    `${item.vatRate}%`,
-    `${(item.priceHT * item.quantity).toFixed(2)} €`,
-    `${((item.priceHT * item.quantity * item.vatRate) / 100).toFixed(2)} €`,
-    `${(item.priceHT * item.quantity * (1 + item.vatRate / 100)).toFixed(2)} €`,
-  ]);
-
-  autoTable(doc, {
-    startY: tableStartY,
-    head: [
-      [
-        "Article",
-        "Description",
-        "Qté",
-        "Prix HT",
-        "TVA",
-        "Total HT",
-        "Montant TVA",
-        "Total TTC",
-      ],
-    ],
-    body: tableData,
-    theme: "grid",
-    headStyles: {
-      fillColor: [primaryColor[0], primaryColor[1], primaryColor[2]],
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-    },
-    styles: {
-      fontSize: 10,
-      cellPadding: 3,
-    },
-    columnStyles: {
-      0: { cellWidth: 30 },
-      1: { cellWidth: 40 },
-      2: { cellWidth: 10 },
-      3: { cellWidth: 20 },
-      4: { cellWidth: 15 },
-      5: { cellWidth: 20 },
-      6: { cellWidth: 25 },
-      7: { cellWidth: 25 },
-    },
-  });
-
-  // Récupérer la position finale du tableau
-  const finalY = (doc as any).lastAutoTable.finalY;
-
-  // Calculer les totaux
-  const totalHT = items.reduce(
-    (sum, item) => sum + item.priceHT * item.quantity,
-    0
-  );
-  const totalTVA = items.reduce(
-    (sum, item) =>
-      sum + (item.priceHT * item.quantity * item.vatRate) / 100,
-    0
-  );
-  const totalTTC = totalHT + totalTVA;
-
-  // Afficher les totaux
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text("Total HT:", pageWidth - margin - 60, finalY + 15, {
-    align: "right",
-  });
-  doc.text("Total TVA:", pageWidth - margin - 60, finalY + 22, {
-    align: "right",
-  });
-  doc.text("Total TTC:", pageWidth - margin - 60, finalY + 29, {
-    align: "right",
-  });
-
-  doc.setFont("helvetica", "normal");
-  doc.text(`${totalHT.toFixed(2)} €`, pageWidth - margin, finalY + 15, {
-    align: "right",
-  });
-  doc.text(`${totalTVA.toFixed(2)} €`, pageWidth - margin, finalY + 22, {
-    align: "right",
-  });
-  doc.setFont("helvetica", "bold");
-  doc.text(`${totalTTC.toFixed(2)} €`, pageWidth - margin, finalY + 29, {
-    align: "right",
-  });
-
-  // Mentions légales obligatoires en France
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  const legalText = [
-    "En cas de retard de paiement, indemnité forfaitaire pour frais de recouvrement : 40 euros (art. L.441-6 du Code de Commerce).",
-    "Pas d'escompte pour paiement anticipé. Pénalités de retard: trois fois le taux d'intérêt légal.",
-    `TVA acquittée sur les encaissements. RCS ${companyInfo.city} - SIRET: ${companyInfo.siret} ${
-      companyInfo.vatNumber ? `- N° TVA Intracom: ${companyInfo.vatNumber}` : ""
-    }`,
-  ].join("\n");
-  doc.text(legalText, pageWidth / 2, pageHeight - margin - 10, {
-    align: "center",
-    maxWidth: pageWidth - 2 * margin,
-  });
-
-  // Convertir en base64
-  return doc.output("datauristring");
 };
+
+// Fonction pour traduire les statuts en français
+function translateStatus(status: InvoiceStatus): string {
+  switch (status) {
+    case InvoiceStatus.DRAFT:
+      return "Brouillon";
+    case InvoiceStatus.PENDING:
+      return "En attente";
+    case InvoiceStatus.APPROVED:
+      return "Approuvée";
+    case InvoiceStatus.REJECTED:
+      return "Rejetée";
+    case InvoiceStatus.PAID:
+      return "Payée";
+    case InvoiceStatus.CANCELLED:
+      return "Annulée";
+    default:
+      return "Inconnu";
+  }
+}
