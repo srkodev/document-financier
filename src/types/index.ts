@@ -13,11 +13,12 @@ export interface Invoice {
   number: string;
   amount: number;
   description: string;
-  status: "pending" | "paid" | "draft";
+  status: InvoiceStatus;
   user_id: string;
   created_at: string;
   category?: string | null;
   pdf_url?: string | null;
+  updated_at?: string;
 }
 
 export interface Article {
@@ -44,7 +45,7 @@ export interface Transaction {
   description: string;
   category?: string | null;
   date: string;
-  status: string;
+  status: TransactionStatus;
   invoice_id?: string | null;
   created_at: string;
 }
@@ -84,6 +85,7 @@ export interface ReimbursementRequest {
   description: string;
   created_at: string;
   updated_at: string;
+  category?: string | null;
 }
 
 export type Role = "super_admin" | "admin" | "resp_pole" | "agent";

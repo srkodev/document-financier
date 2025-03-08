@@ -1,69 +1,84 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import DashboardSummary from "@/components/dashboard/DashboardSummary";
 import RecentTransactions from "@/components/dashboard/RecentTransactions";
 import BudgetOverview from "@/components/dashboard/BudgetOverview";
-import { Budget, Transaction } from "@/types";
+import { Budget, Transaction, InvoiceStatus } from "@/types";
 import { fetchBudget } from "@/services/budgetService";
 import { fetchTransactions } from "@/services/transactionService";
 import { fetchInvoices } from "@/services/invoiceService";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 const Index = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState({
-    totalInvoices: 0,
-    pendingInvoices: 0,
-    totalSpent: 0,
-    totalBudget: 0
-  });
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
-  const [budgetData, setBudgetData] = useState<Budget | null>(null);
-
   const { toast } = useToast();
 
-  // Load data from database
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      setIsLoading(true);
-      try {
-        // Fetch budget data
-        const budget = await fetchBudget();
-        if (budget) {
-          setBudgetData(budget);
-        }
+  // Fetch budget data with React Query
+  const { data: budgetData, isLoading: budgetLoading } = useQuery({
+    queryKey: ['budget'],
+    queryFn: fetchBudget,
+    onError: (error) => {
+      console.error("Error loading budget data:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les données du budget",
+        variant: "destructive",
+      });
+    }
+  });
 
-        // Fetch recent transactions
-        const transactions = await fetchTransactions();
-        setRecentTransactions(transactions.slice(0, 5)); // Show only 5 most recent
+  // Fetch transactions with React Query
+  const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: fetchTransactions,
+    onError: (error) => {
+      console.error("Error loading transactions:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les transactions",
+        variant: "destructive",
+      });
+    }
+  });
 
-        // Fetch invoices for summary
-        const allInvoices = await fetchInvoices();
-        const pendingInvoices = await fetchInvoices("pending");
+  // Fetch invoices for summary with React Query
+  const { data: allInvoices = [], isLoading: allInvoicesLoading } = useQuery({
+    queryKey: ['invoices', 'all'],
+    queryFn: () => fetchInvoices(),
+    onError: (error) => {
+      console.error("Error loading invoices:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les factures",
+        variant: "destructive",
+      });
+    }
+  });
 
-        // Update dashboard data
-        setDashboardData({
-          totalInvoices: allInvoices.length,
-          pendingInvoices: pendingInvoices.length,
-          totalSpent: budget?.totalSpent || 0,
-          totalBudget: budget?.totalAvailable || 0
-        });
+  // Fetch pending invoices with React Query
+  const { data: pendingInvoices = [], isLoading: pendingInvoicesLoading } = useQuery({
+    queryKey: ['invoices', 'pending'],
+    queryFn: () => fetchInvoices(InvoiceStatus.PENDING),
+    onError: (error) => {
+      console.error("Error loading pending invoices:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les factures en attente",
+        variant: "destructive",
+      });
+    }
+  });
 
-      } catch (error: any) {
-        console.error("Error loading dashboard data:", error);
-        toast({
-          title: "Erreur",
-          description: "Impossible de charger les données du tableau de bord",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const isLoading = budgetLoading || transactionsLoading || allInvoicesLoading || pendingInvoicesLoading;
+  const recentTransactions = transactions.slice(0, 5); // Show only 5 most recent
 
-    loadDashboardData();
-  }, [toast]);
+  const dashboardData = {
+    totalInvoices: allInvoices.length,
+    pendingInvoices: pendingInvoices.length,
+    totalSpent: budgetData?.total_spent || 0,
+    totalBudget: budgetData?.total_available || 0
+  };
 
   return (
     <DashboardLayout>

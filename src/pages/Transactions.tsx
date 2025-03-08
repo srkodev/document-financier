@@ -27,71 +27,80 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Transaction } from "@/types";
+import { Transaction, TransactionStatus } from "@/types";
 import { fetchTransactions, deleteTransaction } from "@/services/transactionService";
 import { fetchCategories } from "@/services/categoryService";
 import { useToast } from "@/hooks/use-toast";
 import StatusBadge from "@/components/ui-custom/StatusBadge";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const Transactions = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [categories, setCategories] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [transactionsData, categoriesData] = await Promise.all([
-          fetchTransactions(),
-          fetchCategories()
-        ]);
-        
-        setTransactions(transactionsData);
-        setCategories(categoriesData.map(cat => cat.name));
-      } catch (error) {
-        console.error("Error loading transactions data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load transactions data",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadData();
-  }, [toast]);
+  // Fetch transactions with React Query
+  const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: fetchTransactions,
+    onError: (error) => {
+      console.error("Error loading transactions:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load transactions data",
+        variant: "destructive",
+      });
+    }
+  });
 
-  const handleDeleteTransaction = async (id: string) => {
-    try {
-      await deleteTransaction(id);
-      setTransactions(transactions.filter(transaction => transaction.id !== id));
+  // Fetch categories with React Query
+  const { data: categoriesData = [], isLoading: categoriesLoading } = useQuery({
+    queryKey: ['categories'],
+    queryFn: fetchCategories,
+    onError: (error) => {
+      console.error("Error loading categories:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load categories",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const categories = categoriesData.map(cat => cat.name);
+
+  // Delete transaction mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteTransaction(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
       toast({
         title: "Success",
         description: "Transaction deleted successfully",
       });
-    } catch (error) {
+      setTransactionToDelete(null);
+    },
+    onError: (error) => {
       console.error("Error deleting transaction:", error);
       toast({
         title: "Error",
         description: "Failed to delete transaction",
         variant: "destructive",
       });
-    } finally {
       setTransactionToDelete(null);
     }
+  });
+
+  const handleDeleteTransaction = (id: string) => {
+    deleteMutation.mutate(id);
   };
 
   const filterTransactions = () => {
-    return transactions.filter(transaction => {
+    return transactions.filter((transaction: Transaction) => {
       const matchesSearch = searchTerm === "" || 
         transaction.description.toLowerCase().includes(searchTerm.toLowerCase());
       
@@ -106,6 +115,7 @@ const Transactions = () => {
   };
 
   const filteredTransactions = filterTransactions();
+  const isLoading = transactionsLoading || categoriesLoading;
 
   return (
     <DashboardLayout>
@@ -140,7 +150,7 @@ const Transactions = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All Categories</SelectItem>
-                  {categories.map((category) => (
+                  {categories.map((category: string) => (
                     <SelectItem key={category} value={category}>{category}</SelectItem>
                   ))}
                 </SelectContent>
@@ -153,9 +163,9 @@ const Transactions = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value={TransactionStatus.PENDING}>Pending</SelectItem>
+                  <SelectItem value={TransactionStatus.COMPLETED}>Completed</SelectItem>
+                  <SelectItem value={TransactionStatus.CANCELLED}>Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -169,7 +179,7 @@ const Transactions = () => {
             </Button>
           </div>
 
-          {loading ? (
+          {isLoading ? (
             <div className="text-center py-8">Loading transactions...</div>
           ) : filteredTransactions.length === 0 ? (
             <div className="text-center py-8">
@@ -189,7 +199,7 @@ const Transactions = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((transaction) => (
+                  {filteredTransactions.map((transaction: Transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>
                         {format(new Date(transaction.date), 'dd/MM/yyyy')}
