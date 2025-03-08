@@ -1,254 +1,318 @@
-
 import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { z } from "zod";
 import { useForm } from "react-hook-form";
-import { format } from "date-fns";
-import { Calendar as CalendarIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
+import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Transaction } from "@/types";
-import { createTransaction, getTransactionById, updateTransaction } from "@/services/transactionService";
-import { useToast } from "@/hooks/use-toast";
-import { fetchCategories } from "@/services/categoryService";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { TransactionStatus } from "@/types";
+import { Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+const formSchema = z.object({
+  description: z.string().min(3, "La description doit contenir au moins 3 caractères"),
+  amount: z.string().refine(value => !isNaN(Number(value)), {
+    message: "Le montant doit être un nombre valide",
+  }),
+  category: z.string().optional(),
+  date: z.date({
+    required_error: "Une date est requise.",
+  }),
+  status: z.string().default(TransactionStatus.PENDING),
+  invoiceId: z.string().optional(),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 interface TransactionFormProps {
-  isEdit?: boolean;
+  transactionId?: string;
 }
 
-const TransactionForm: React.FC<TransactionFormProps> = ({ isEdit = false }) => {
-  const { id } = useParams<{ id: string }>();
+const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [transaction, setTransaction] = useState<Transaction | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [date, setDate] = useState<Date>(new Date());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [categories, setCategories] = useState<string[]>(["Matériel", "Fournitures", "Événement", "Transport", "Remboursement", "Autre"]);
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    reset,
-    formState: { errors },
-  } = useForm<Omit<Transaction, "id" | "created_at">>();
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      description: "",
+      amount: "",
+      category: "",
+      date: new Date(),
+      status: TransactionStatus.PENDING,
+      invoiceId: "",
+    },
+  });
 
   useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        const categoriesData = await fetchCategories();
-        const categoryNames = categoriesData.map(cat => cat.name);
-        setCategories(categoryNames);
-      } catch (error) {
-        console.error("Failed to load categories:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load categories",
-          variant: "destructive",
+    if (transactionId) {
+      fetchTransactionData(transactionId);
+    }
+  }, [transactionId]);
+
+  const fetchTransactionData = async (id: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        // Format the date to a Date object
+        const formattedDate = new Date(data.date);
+
+        form.setValue({
+          description: data.description,
+          amount: String(data.amount),
+          category: data.category || "",
+          date: formattedDate,
+          status: data.status,
+          invoiceId: data.invoice_id || "",
         });
       }
-    };
-    
-    loadCategories();
-
-    if (isEdit && id) {
-      const fetchTransaction = async () => {
-        setLoading(true);
-        try {
-          const data = await getTransactionById(id);
-          if (data) {
-            setTransaction(data);
-            reset({
-              amount: data.amount,
-              description: data.description,
-              category: data.category,
-              date: data.date,
-              status: data.status,
-            });
-            
-            if (data.date) {
-              setDate(new Date(data.date));
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching transaction:", error);
-          toast({
-            title: "Error",
-            description: "Failed to fetch transaction details",
-            variant: "destructive",
-          });
-        } finally {
-          setLoading(false);
-        }
-      };
-      
-      fetchTransaction();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load transaction data",
+        variant: "destructive",
+      });
     }
-  }, [id, isEdit, reset, toast]);
+  };
 
-  const onSubmit = async (data: Omit<Transaction, "id" | "created_at">) => {
-    setLoading(true);
+  const onSubmit = async (values: FormValues) => {
+    if (!user) return;
+    
+    setIsSubmitting(true);
+    
     try {
-      const formattedData = {
-        ...data,
-        date: date.toISOString(),
+      const transactionData = {
+        description: values.description,
+        amount: Number(values.amount),
+        category: values.category || null,
+        date: format(values.date, "yyyy-MM-dd'T'HH:mm:ss"),
+        status: values.status as TransactionStatus, // Conversion explicite en TransactionStatus
+        invoice_id: values.invoiceId || null
       };
 
-      if (isEdit && id) {
-        await updateTransaction(id, formattedData);
+      if (transactionId) {
+        // Update existing transaction
+        const { error } = await supabase
+          .from("transactions")
+          .update(transactionData)
+          .eq("id", transactionId);
+
+        if (error) {
+          throw error;
+        }
+
         toast({
           title: "Success",
           description: "Transaction updated successfully",
         });
       } else {
-        await createTransaction(formattedData);
+        // Create new transaction
+        const { error } = await supabase.from("transactions").insert([
+          {
+            ...transactionData,
+            user_id: user.id,
+          },
+        ]);
+
+        if (error) {
+          throw error;
+        }
+
         toast({
           title: "Success",
           description: "Transaction created successfully",
         });
       }
-      
+
       navigate("/transactions");
-    } catch (error) {
-      console.error("Error saving transaction:", error);
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to save transaction",
+        description: error.message || "Failed to create transaction",
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <Card className="p-6">
-        <h2 className="text-2xl font-bold mb-6">
-          {isEdit ? "Edit Transaction" : "Add New Transaction"}
-        </h2>
-        
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label htmlFor="amount">Amount</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                {...register("amount", { required: "Amount is required" })}
-                placeholder="0.00"
-              />
-              {errors.amount && (
-                <p className="text-sm text-red-500">{errors.amount.message}</p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="date">Date</Label>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea placeholder="Transaction description..." {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="amount"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Amount</FormLabel>
+              <FormControl>
+                <Input type="number" placeholder="0.00" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="category"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Category</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>{category}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="date"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Date</FormLabel>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !date && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date ? format(date, "PPP") : <span>Pick a date</span>}
-                  </Button>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-[240px] pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={date}
-                    onSelect={(date) => {
-                      setDate(date || new Date());
-                      setValue("date", (date || new Date()).toISOString());
-                    }}
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    disabled={(date) =>
+                      date > new Date()
+                    }
                     initialFocus
                   />
                 </PopoverContent>
               </Popover>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Select
-                onValueChange={(value) => setValue("category", value)}
-                defaultValue={transaction?.category}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="status"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Status</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a status" />
+                  </SelectTrigger>
+                </FormControl>
                 <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value={TransactionStatus.PENDING}>Pending</SelectItem>
+                  <SelectItem value={TransactionStatus.COMPLETED}>Completed</SelectItem>
+                  <SelectItem value={TransactionStatus.CANCELLED}>Cancelled</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                onValueChange={(value) => setValue("status", value)}
-                defaultValue={transaction?.status || "completed"}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              {...register("description", { required: "Description is required" })}
-              placeholder="Transaction description"
-              rows={4}
-            />
-            {errors.description && (
-              <p className="text-sm text-red-500">{errors.description.message}</p>
-            )}
-          </div>
-          
-          <div className="flex justify-end space-x-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate('/transactions')}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading
-                ? "Saving..."
-                : isEdit
-                ? "Update Transaction"
-                : "Create Transaction"}
-            </Button>
-          </div>
-        </form>
-      </Card>
-    </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="invoiceId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Invoice ID (Optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter invoice ID" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Please wait
+            </>
+          ) : (
+            "Submit"
+          )}
+        </Button>
+      </form>
+    </Form>
   );
 };
 

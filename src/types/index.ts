@@ -27,6 +27,9 @@ export interface Article {
   description: string | null;
   price_ht: number;
   vat_rate: number;
+  // Propriétés en camelCase pour compatibilité avec les composants existants
+  priceHT: number;
+  vatRate: number;
   user_id: string;
   created_at: string;
 }

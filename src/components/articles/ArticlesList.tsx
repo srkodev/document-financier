@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Article } from "@/types";
@@ -57,7 +56,15 @@ const ArticlesList: React.FC = () => {
   });
 
   const handleEdit = (article: Article) => {
-    setCurrentArticle(article);
+    const formattedArticle = {
+      id: article.id,
+      name: article.name,
+      description: article.description || "",
+      priceHT: article.priceHT || article.price_ht,
+      vatRate: article.vatRate || article.vat_rate
+    };
+    
+    setCurrentArticle(formattedArticle as any);
     setDialogOpen(true);
   };
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -67,6 +66,8 @@ const fetchArticles = async (userId: string) => {
     id: item.id,
     name: item.name,
     description: item.description,
+    price_ht: item.price_ht,
+    vat_rate: item.vat_rate,
     priceHT: item.price_ht,
     vatRate: item.vat_rate,
     created_at: item.created_at,
@@ -105,7 +106,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
     enabled: !!user && open,
   });
 
-  // Charger les catégories depuis la base de données
   useEffect(() => {
     if (open) {
       fetchCategories().then(fetchedCategories => {
@@ -126,7 +126,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
     },
   });
 
-  // Mettre à jour le formulaire quand les items changent
   useEffect(() => {
     form.setValue("items", items);
   }, [items, form]);
@@ -141,8 +140,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
       article_id: article.id,
       quantity: quantity,
       name: article.name,
-      priceHT: article.priceHT,
-      vatRate: article.vatRate
+      priceHT: article.priceHT || article.price_ht,
+      vatRate: article.vatRate || article.vat_rate
     };
     
     setItems([...items, newItem]);
@@ -174,7 +173,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
   const onSubmit = async (values: FormValues) => {
     if (!user) return;
     
-    // Vérifier qu'au moins un article a été ajouté
     if (items.length === 0) {
       toast({
         title: "Erreur",
@@ -186,19 +184,16 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
     
     setLoading(true);
     try {
-      // Calculer le montant total
       const { totalTTC } = calculateTotal();
       
-      // Générer un numéro de facture
       const invoiceNumber = `INV-${Date.now().toString().substring(6)}`;
       
-      // Créer la facture avec génération de PDF automatique
       await createInvoiceWithPDF({
         number: invoiceNumber,
         user_id: user.id,
         description: values.description,
         amount: totalTTC,
-        status: values.status,
+        status: values.status as InvoiceStatus,
         category: values.category,
       }, items);
       
