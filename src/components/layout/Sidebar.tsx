@@ -10,7 +10,6 @@ import {
   Settings,
   Users,
   PieChart,
-  LineChart,
   CreditCard,
   Package,
   RefreshCcw
@@ -65,12 +64,6 @@ const Sidebar: React.FC<SidebarProps> = ({ className, isOpen, onClose }) => {
       href: '/budget',
       icon: PieChart,
       requireRespPole: true,
-    },
-    {
-      label: 'Rapports',
-      href: '/reports',
-      icon: LineChart,
-      requireAdmin: true,
     },
     {
       label: 'Utilisateurs',

@@ -1,92 +1,150 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { ReimbursementRequest } from "@/types";
+import { createTransaction } from "@/services/transactionService";
 
-// Fonction pour récupérer toutes les demandes de remboursement
-export const fetchReimbursementRequests = async (status?: string) => {
-  try {
-    let query = supabase
-      .from("reimbursement_requests")
-      .select("*, invoices(*)");
-    
-    if (status && status !== "all") {
-      query = query.eq("status", status);
-    }
+export const fetchReimbursements = async (): Promise<ReimbursementRequest[]> => {
+  const { data, error } = await supabase
+    .from("reimbursement_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-    const { data, error } = await query.order("created_at", { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return data as any[];
-  } catch (error: any) {
-    console.error("Error fetching reimbursement requests:", error);
-    return [];
+  if (error) {
+    console.error("Error fetching reimbursements:", error);
+    throw error;
   }
+
+  return data || [];
 };
 
-// Fonction pour créer une nouvelle demande de remboursement
-export const createReimbursementRequest = async (
-  invoiceId: string, 
-  amount: number, 
-  description: string
-) => {
-  try {
-    const user = await supabase.auth.getUser();
-    if (!user.data.user) throw new Error("Utilisateur non authentifié");
+export const getReimbursementById = async (id: string): Promise<ReimbursementRequest | null> => {
+  const { data, error } = await supabase
+    .from("reimbursement_requests")
+    .select("*")
+    .eq("id", id)
+    .single();
 
+  if (error) {
+    console.error(`Error fetching reimbursement with ID ${id}:`, error);
+    return null;
+  }
+
+  return data as ReimbursementRequest;
+};
+
+export const createReimbursementRequest = async (
+  reimbursement: Omit<ReimbursementRequest, "id" | "created_at" | "updated_at">
+): Promise<ReimbursementRequest | null> => {
+  try {
     const { data, error } = await supabase
       .from("reimbursement_requests")
-      .insert({
-        invoice_id: invoiceId,
-        user_id: user.data.user.id,
-        amount: amount,
-        description: description,
-        status: "pending",
-      })
+      .insert([reimbursement])
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) throw error;
     return data as ReimbursementRequest;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error creating reimbursement request:", error);
     throw error;
   }
 };
 
-// Fonction pour mettre à jour le statut d'une demande de remboursement
-export const updateReimbursementStatus = async (id: string, status: "approved" | "rejected") => {
+export const updateReimbursementStatus = async (
+  id: string,
+  status: string,
+  description?: string
+): Promise<ReimbursementRequest | null> => {
   try {
     const { data, error } = await supabase
       .from("reimbursement_requests")
-      .update({ status })
+      .update({
+        status,
+        description: description || undefined,
+        updated_at: new Date().toISOString()
+      })
       .eq("id", id)
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) throw error;
+    
+    // Si le remboursement est approuvé, créons une transaction correspondante
+    if (status === "approved") {
+      const reimbursement = data as ReimbursementRequest;
+      
+      try {
+        // Créer une transaction correspondant au remboursement
+        await createTransaction({
+          amount: reimbursement.amount,
+          description: `Remboursement approuvé: ${reimbursement.description || 'Sans description'}`,
+          category: reimbursement.category || 'Remboursements',
+          date: new Date().toISOString(),
+          status: "completed",
+          invoice_id: reimbursement.invoice_id
+        });
+        
+        console.log("Transaction créée pour le remboursement:", reimbursement.id);
+      } catch (transactionError) {
+        console.error("Erreur lors de la création de la transaction pour le remboursement:", transactionError);
+        // On continue néanmoins le processus, le remboursement est approuvé même si la transaction échoue
+      }
+    }
+    
     return data as ReimbursementRequest;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error updating reimbursement status:", error);
     throw error;
   }
 };
 
-// Fonction pour supprimer une demande de remboursement
-export const deleteReimbursementRequest = async (id: string) => {
+export const deleteReimbursementRequest = async (id: string): Promise<boolean> => {
   try {
-    const user = await supabase.auth.getUser();
-    if (!user.data.user) throw new Error("Utilisateur non authentifié");
-
     const { error } = await supabase
       .from("reimbursement_requests")
       .delete()
-      .eq("id", id)
-      .eq("user_id", user.data.user.id);
+      .eq("id", id);
 
-    if (error) throw new Error(error.message);
+    if (error) throw error;
     return true;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error deleting reimbursement request:", error);
-    throw error;
+    return false;
+  }
+};
+
+export const getReimbursementSummary = async (): Promise<{
+  totalCount: number;
+  pendingCount: number;
+  totalAmount: number;
+}> => {
+  try {
+    const { data, error } = await supabase
+      .from("reimbursement_requests")
+      .select("*");
+
+    if (error) throw error;
+
+    const reimbursements = data || [];
+    const totalAmount = reimbursements.reduce(
+      (sum, request) => sum + Number(request.amount),
+      0
+    );
+    const pendingCount = reimbursements.filter(
+      (request) => request.status === "pending"
+    ).length;
+
+    return {
+      totalCount: reimbursements.length,
+      pendingCount,
+      totalAmount,
+    };
+  } catch (error) {
+    console.error("Error in getReimbursementSummary:", error);
+    return {
+      totalCount: 0,
+      pendingCount: 0,
+      totalAmount: 0,
+    };
   }
 };

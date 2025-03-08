@@ -10,6 +10,7 @@ import Articles from "@/pages/Articles";
 import Reimbursements from "@/pages/Reimbursements";
 import Budget from "@/pages/Budget";
 import Transactions from "@/pages/Transactions";
+import TransactionForm from "@/pages/TransactionForm";
 import Settings from "@/pages/Settings";
 import Users from "@/pages/Users";
 import NotFound from "@/pages/NotFound";
@@ -39,8 +40,8 @@ function App() {
             <Route path="/reimbursements" element={<Reimbursements />} />
             <Route path="/budget" element={<Budget />} />
             <Route path="/transactions" element={<Transactions />} />
-            <Route path="/transactions/new" element={<Transactions />} />
-            <Route path="/transactions/:id/edit" element={<Transactions />} />
+            <Route path="/transactions/new" element={<TransactionForm />} />
+            <Route path="/transactions/:id/edit" element={<TransactionForm />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/users" element={<Users />} />
             <Route path="*" element={<NotFound />} />
