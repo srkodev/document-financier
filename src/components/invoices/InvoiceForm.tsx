@@ -13,13 +13,15 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { InvoiceStatus, Article } from "@/types";
-import { Loader2, FileUp, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Save, X } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { createInvoiceWithPDF } from "@/services/invoiceService";
+import ArticleForm from "@/components/articles/ArticleForm";
 
 interface InvoiceItem {
   article_id: string;
@@ -52,8 +54,6 @@ interface InvoiceFormProps {
   onSuccess?: () => void;
 }
 
-const categories = ["Matériel", "Fournitures", "Événement", "Transport", "Remboursement", "Autre"];
-
 const fetchArticles = async (userId: string) => {
   const { data, error } = await supabase
     .from("articles")
@@ -75,19 +75,46 @@ const fetchArticles = async (userId: string) => {
   })) as Article[];
 };
 
+const fetchCategories = async () => {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("*")
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.error("Erreur lors de la récupération des catégories", error);
+    return [];
+  }
+
+  return data.map(cat => cat.name) || [];
+};
+
 const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess }) => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
   const [quantity, setQuantity] = useState<number>(1);
+  const [isArticleFormOpen, setIsArticleFormOpen] = useState(false);
+  const [categories, setCategories] = useState<string[]>(["Matériel", "Fournitures", "Événement", "Transport", "Remboursement", "Autre"]);
 
   const { data: articles = [] } = useQuery({
     queryKey: ["user-articles"],
     queryFn: () => fetchArticles(user?.id || ""),
     enabled: !!user && open,
   });
+
+  // Charger les catégories depuis la base de données
+  useEffect(() => {
+    if (open) {
+      fetchCategories().then(fetchedCategories => {
+        if (fetchedCategories && fetchedCategories.length > 0) {
+          setCategories(fetchedCategories);
+        }
+      });
+    }
+  }, [open]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -103,12 +130,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
   useEffect(() => {
     form.setValue("items", items);
   }, [items, form]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-    }
-  };
 
   const addItem = () => {
     if (!selectedArticleId) return;
@@ -141,6 +162,15 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
     return { totalHT, totalTVA, totalTTC };
   };
 
+  const handleArticleCreated = async () => {
+    setIsArticleFormOpen(false);
+    await queryClient.invalidateQueries({ queryKey: ["user-articles"] });
+    toast({
+      title: "Article créé",
+      description: "L'article a été créé avec succès et est disponible pour la facture.",
+    });
+  };
+
   const onSubmit = async (values: FormValues) => {
     if (!user) return;
     
@@ -162,52 +192,23 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
       // Générer un numéro de facture
       const invoiceNumber = `INV-${Date.now().toString().substring(6)}`;
       
-      let pdfUrl = null;
-      
-      // Upload du fichier si présent
-      if (file) {
-        const fileExt = file.name.split('.').pop();
-        const filePath = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('invoices')
-          .upload(filePath, file);
-          
-        if (uploadError) {
-          throw new Error("Erreur lors de l'upload du fichier");
-        }
-        
-        const { data: urlData } = supabase.storage
-          .from('invoices')
-          .getPublicUrl(filePath);
-          
-        pdfUrl = urlData.publicUrl;
-      }
-      
-      // Insérer la facture dans la base de données
-      const { data: invoice, error } = await supabase.from('invoices').insert({
+      // Créer la facture avec génération de PDF automatique
+      await createInvoiceWithPDF({
         number: invoiceNumber,
         user_id: user.id,
         description: values.description,
         amount: totalTTC,
         status: values.status,
         category: values.category,
-        pdf_url: pdfUrl,
-      }).select().single();
-      
-      if (error) throw error;
-      
-      // Si des articles sont associés, insérer les détails de la facture (cette table doit être créée séparément)
-      // Remarque: Cela nécessiterait l'ajout d'une table invoice_items dans votre schéma SQL
+      }, items);
       
       toast({
         title: "Facture créée",
-        description: "Votre facture a été créée avec succès.",
+        description: "Votre facture a été créée avec succès et le PDF a été généré.",
       });
       
       form.reset();
       setItems([]);
-      setFile(null);
       onOpenChange(false);
       
       if (onSuccess) onSuccess();
@@ -215,7 +216,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
     } catch (error: any) {
       toast({
         title: "Erreur",
-        description: error.message || "Une erreur est survenue",
+        description: error.message || "Une erreur est survenue lors de la création de la facture",
         variant: "destructive",
       });
     } finally {
@@ -224,181 +225,171 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>Nouvelle facture</DialogTitle>
-        </DialogHeader>
-        
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Description de la facture..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Catégorie</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Nouvelle facture</DialogTitle>
+          </DialogHeader>
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner une catégorie" />
-                      </SelectTrigger>
+                      <Textarea placeholder="Description de la facture..." {...field} />
                     </FormControl>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <div>
-              <Label>Articles</Label>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               
-              <div className="flex flex-col space-y-2 mt-2">
-                <div className="flex space-x-2">
-                  <Select value={selectedArticleId} onValueChange={setSelectedArticleId}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Sélectionner un article" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {articles.map((article) => (
-                        <SelectItem key={article.id} value={article.id}>
-                          {article.name} - {article.priceHT.toFixed(2)}€ HT
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  <Input
-                    type="number"
-                    value={quantity}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                    min="1"
-                    max="100"
-                    className="w-20"
-                  />
-                  
-                  <Button type="button" onClick={addItem} disabled={!selectedArticleId}>
-                    <Plus className="h-4 w-4" />
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Catégorie</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner une catégorie" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {categories.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label>Articles</Label>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setIsArticleFormOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Nouvel article
                   </Button>
                 </div>
                 
-                {articles.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Vous n'avez pas encore créé d'articles. 
-                    <Button 
-                      variant="link" 
-                      className="p-0 h-auto text-sm"
-                      onClick={() => {
-                        onOpenChange(false);
-                        // Rediriger vers la page des articles
-                        window.location.href = "/articles";
-                      }}
-                    >
-                      Créez-en un maintenant.
-                    </Button>
-                  </p>
-                )}
-                
-                {items.length > 0 && (
-                  <Card className="p-3 mt-3">
-                    <ScrollArea className="max-h-40">
-                      <div className="space-y-2">
-                        {items.map((item, index) => (
-                          <div key={index} className="flex justify-between items-center">
-                            <div>
-                              <div className="flex items-center">
-                                <span className="font-medium">{item.name}</span>
-                                <Badge variant="outline" className="ml-2">
-                                  {item.quantity} x {item.priceHT.toFixed(2)}€ HT
-                                </Badge>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                TVA: {item.vatRate}% | Total: {((item.priceHT * item.quantity) * (1 + item.vatRate / 100)).toFixed(2)}€ TTC
-                              </div>
-                            </div>
-                            <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                <div className="flex flex-col space-y-2 mt-2">
+                  <div className="flex space-x-2">
+                    <Select value={selectedArticleId} onValueChange={setSelectedArticleId}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Sélectionner un article" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {articles.map((article) => (
+                          <SelectItem key={article.id} value={article.id}>
+                            {article.name} - {article.priceHT.toFixed(2)}€ HT
+                          </SelectItem>
                         ))}
-                      </div>
-                    </ScrollArea>
+                      </SelectContent>
+                    </Select>
                     
-                    <Separator className="my-3" />
+                    <Input
+                      type="number"
+                      value={quantity}
+                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                      min="1"
+                      max="100"
+                      className="w-20"
+                    />
                     
-                    <div className="text-sm space-y-1">
-                      <div className="flex justify-between">
-                        <span>Total HT:</span>
-                        <span>{calculateTotal().totalHT.toFixed(2)}€</span>
+                    <Button type="button" onClick={addItem} disabled={!selectedArticleId}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  {articles.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Vous n'avez pas encore créé d'articles. Cliquez sur "Nouvel article" pour en créer un.
+                    </p>
+                  )}
+                  
+                  {items.length > 0 && (
+                    <Card className="p-3 mt-3">
+                      <ScrollArea className="max-h-40">
+                        <div className="space-y-2">
+                          {items.map((item, index) => (
+                            <div key={index} className="flex justify-between items-center">
+                              <div>
+                                <div className="flex items-center">
+                                  <span className="font-medium">{item.name}</span>
+                                  <Badge variant="outline" className="ml-2">
+                                    {item.quantity} x {item.priceHT.toFixed(2)}€ HT
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  TVA: {item.vatRate}% | Total: {((item.priceHT * item.quantity) * (1 + item.vatRate / 100)).toFixed(2)}€ TTC
+                                </div>
+                              </div>
+                              <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                      
+                      <Separator className="my-3" />
+                      
+                      <div className="text-sm space-y-1">
+                        <div className="flex justify-between">
+                          <span>Total HT:</span>
+                          <span>{calculateTotal().totalHT.toFixed(2)}€</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Total TVA:</span>
+                          <span>{calculateTotal().totalTVA.toFixed(2)}€</span>
+                        </div>
+                        <div className="flex justify-between font-bold">
+                          <span>Total TTC:</span>
+                          <span>{calculateTotal().totalTTC.toFixed(2)}€</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Total TVA:</span>
-                        <span>{calculateTotal().totalTVA.toFixed(2)}€</span>
-                      </div>
-                      <div className="flex justify-between font-bold">
-                        <span>Total TTC:</span>
-                        <span>{calculateTotal().totalTTC.toFixed(2)}€</span>
-                      </div>
-                    </div>
-                  </Card>
-                )}
+                    </Card>
+                  )}
+                </div>
               </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="file">Pièce jointe (PDF)</Label>
-              <div className="flex items-center gap-2">
-                <Input 
-                  id="file" 
-                  type="file" 
-                  accept=".pdf" 
-                  onChange={handleFileChange}
-                  className="flex-1"
-                />
-                <FileUp className="h-5 w-5 text-muted-foreground" />
-              </div>
-              {file && (
-                <p className="text-xs text-muted-foreground">{file.name}</p>
-              )}
-            </div>
-            
-            <DialogFooter>
-              <Button type="submit" disabled={loading || items.length === 0}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Création en cours...
-                  </>
-                ) : (
-                  "Créer la facture"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+              
+              <DialogFooter>
+                <Button type="submit" disabled={loading || items.length === 0}>
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Création en cours...
+                    </>
+                  ) : (
+                    "Créer la facture et générer le PDF"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <ArticleForm 
+        open={isArticleFormOpen} 
+        onOpenChange={setIsArticleFormOpen} 
+        onSuccess={handleArticleCreated}
+      />
+    </>
   );
 };
 

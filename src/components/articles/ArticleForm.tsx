@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,12 +43,31 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ open, onOpenChange, onSuccess
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: article?.name || "",
-      description: article?.description || "",
-      priceHT: article?.priceHT || undefined,
-      vatRate: article?.vatRate || 20,
+      name: "",
+      description: "",
+      priceHT: undefined,
+      vatRate: 20,
     },
   });
+
+  // Mettre à jour les valeurs du formulaire lorsque l'article change
+  useEffect(() => {
+    if (article && open) {
+      form.reset({
+        name: article.name,
+        description: article.description || "",
+        priceHT: article.priceHT,
+        vatRate: article.vatRate
+      });
+    } else if (!article && open) {
+      form.reset({
+        name: "",
+        description: "",
+        priceHT: undefined,
+        vatRate: 20,
+      });
+    }
+  }, [article, form, open]);
 
   const onSubmit = async (values: FormValues) => {
     if (!user) return;

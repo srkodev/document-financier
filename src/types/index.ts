@@ -114,10 +114,29 @@ export interface Article {
 // Reimbursement Request Interface
 export interface ReimbursementRequest {
   id: string;
-  invoice_id: string;
   user_id: string;
   amount: number;
   status: "pending" | "approved" | "rejected";
+  description?: string;
+  category?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Reimbursement Attachment Interface
+export interface ReimbursementAttachment {
+  id: string;
+  reimbursement_id: string;
+  file_name: string;
+  file_type: string;
+  file_url: string;
+  created_at: string;
+}
+
+// Category Interface
+export interface Category {
+  id: string;
+  name: string;
   description?: string;
   created_at: string;
   updated_at: string;

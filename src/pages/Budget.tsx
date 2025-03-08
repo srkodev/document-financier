@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AddCategoryDialog from "@/components/budget/AddCategoryDialog";
 import BudgetAnalytics from "@/components/budget/BudgetAnalytics";
 import BudgetHistory from "@/components/budget/BudgetHistory";
+import CategoryManager from "@/components/categories/CategoryManager";
 import { Budget, BudgetCategory } from "@/types";
 import { fetchBudget, updateBudget, saveBudgetHistoryEntry } from "@/services/budgetService";
 import { 
@@ -17,7 +18,8 @@ import {
   Save,
   FileText,
   Trash2,
-  BarChart4
+  BarChart4,
+  Settings
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -28,6 +30,8 @@ const BudgetPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const [generalBudget, setGeneralBudget] = useState<number>(0);
+  const [editingGeneralBudget, setEditingGeneralBudget] = useState(false);
   
   // Récupération des données de budget
   const { 
@@ -39,6 +43,12 @@ const BudgetPage = () => {
     queryFn: fetchBudget,
   });
 
+  useEffect(() => {
+    if (budget) {
+      setGeneralBudget(budget.totalAvailable);
+    }
+  }, [budget]);
+
   // Mutation pour la mise à jour du budget
   const updateBudgetMutation = useMutation({
     mutationFn: updateBudget,
@@ -49,6 +59,7 @@ const BudgetPage = () => {
         description: "Les modifications du budget ont été enregistrées avec succès.",
       });
       setEditMode(false);
+      setEditingGeneralBudget(false);
     },
     onError: (error: any) => {
       toast({
@@ -109,7 +120,7 @@ const BudgetPage = () => {
       return {
         ...prev,
         categories: newCategories,
-        totalAvailable: totalAllocated
+        totalAvailable: generalBudget
       };
     });
     
@@ -138,7 +149,6 @@ const BudgetPage = () => {
       return {
         ...prev,
         categories: newCategories,
-        totalAvailable: prev.totalAvailable - categoryAllocated,
         totalSpent: prev.totalSpent - categorySpent
       };
     });
@@ -153,22 +163,33 @@ const BudgetPage = () => {
       description: `La catégorie "${categoryName}" a été supprimée avec succès.`
     });
   };
+
+  // Mettre à jour le budget général
+  const updateGeneralBudget = () => {
+    setEditableBudget(prev => ({
+      ...prev,
+      totalAvailable: generalBudget
+    }));
+    
+    saveHistoryMutation.mutate({
+      description: "Mise à jour du budget général",
+      details: `Budget général mis à jour: ${generalBudget.toLocaleString('fr-FR')} €`
+    });
+    
+    setEditingGeneralBudget(false);
+  };
   
   // Sauvegarder les modifications du budget
   const handleSaveBudget = async () => {
     try {
-      // Calculer les totaux
-      const totalAllocated = Object.values(editableBudget.categories || {}).reduce(
-        (sum, cat) => sum + cat.allocated, 0
-      );
-      
+      // Calculer le total dépensé
       const totalSpent = Object.values(editableBudget.categories || {}).reduce(
         (sum, cat) => sum + cat.spent, 0
       );
       
       const updatedBudget = {
         ...editableBudget,
-        totalAvailable: totalAllocated,
+        totalAvailable: generalBudget,
         totalSpent
       };
       
@@ -176,7 +197,7 @@ const BudgetPage = () => {
       
       saveHistoryMutation.mutate({
         description: "Mise à jour du budget",
-        details: `Budget mis à jour (Total: ${totalAllocated.toLocaleString('fr-FR')} €)`
+        details: `Budget mis à jour (Total: ${generalBudget.toLocaleString('fr-FR')} €)`
       });
       
     } catch (error) {
@@ -271,6 +292,10 @@ const BudgetPage = () => {
               <FileText className="mr-2 h-4 w-4" />
               Gestion
             </TabsTrigger>
+            <TabsTrigger value="categories">
+              <Settings className="mr-2 h-4 w-4" />
+              Catégories
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="overview">
@@ -281,20 +306,38 @@ const BudgetPage = () => {
                 className="lg:col-span-1"
               >
                 <div className="flex flex-col justify-center items-center py-4">
-                  <div className="text-4xl font-bold text-primary mb-2">
-                    {editableBudget.totalAvailable.toLocaleString('fr-FR')} €
-                  </div>
+                  {editingGeneralBudget ? (
+                    <div className="flex items-center gap-2 mb-2">
+                      <Input
+                        type="number"
+                        value={generalBudget}
+                        onChange={(e) => setGeneralBudget(Number(e.target.value))}
+                        className="w-40 text-right"
+                      />
+                      <Button onClick={updateGeneralBudget}>
+                        <Save className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="text-4xl font-bold text-primary mb-2 cursor-pointer" 
+                      onClick={() => setEditingGeneralBudget(true)}
+                    >
+                      {generalBudget.toLocaleString('fr-FR')} €
+                    </div>
+                  )}
+                  
                   <div className="text-lg text-muted-foreground">
-                    Restant: {(editableBudget.totalAvailable - editableBudget.totalSpent).toLocaleString('fr-FR')} €
+                    Restant: {(generalBudget - editableBudget.totalSpent).toLocaleString('fr-FR')} €
                   </div>
                   <div className="w-full h-4 bg-gray-200 rounded-full mt-4 overflow-hidden">
                     <div 
                       className="h-full bg-primary rounded-full"
-                      style={{ width: `${(editableBudget.totalSpent / editableBudget.totalAvailable) * 100}%` }}
+                      style={{ width: `${(editableBudget.totalSpent / generalBudget) * 100}%` }}
                     />
                   </div>
                   <div className="text-sm text-muted-foreground mt-2">
-                    {Math.round((editableBudget.totalSpent / editableBudget.totalAvailable) * 100)}% utilisé
+                    {Math.round((editableBudget.totalSpent / generalBudget) * 100)}% utilisé
                   </div>
                 </div>
               </DataCard>
@@ -403,6 +446,10 @@ const BudgetPage = () => {
                 )}
               </div>
             </DataCard>
+          </TabsContent>
+
+          <TabsContent value="categories">
+            <CategoryManager />
           </TabsContent>
         </Tabs>
         
