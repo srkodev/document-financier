@@ -1,3 +1,4 @@
+
 export interface User {
   id: string;
   name: string | null;
@@ -32,7 +33,7 @@ export interface Article {
 export interface Category {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,10 +42,10 @@ export interface Transaction {
   id: string;
   amount: number;
   description: string;
-  category?: string;
+  category?: string | null;
   date: string;
   status: string;
-  invoice_id?: string;
+  invoice_id?: string | null;
   created_at: string;
 }
 
@@ -59,3 +60,22 @@ export interface Budget {
 }
 
 export type Role = "super_admin" | "admin" | "resp_pole" | "agent";
+
+export enum InvoiceStatus {
+  PENDING = "pending",
+  PAID = "paid",
+  DRAFT = "draft"
+}
+
+export enum TransactionStatus {
+  PENDING = "pending",
+  COMPLETED = "completed",
+  CANCELLED = "cancelled"
+}
+
+export enum UserRole {
+  SUPER_ADMIN = "super_admin",
+  ADMIN = "admin",
+  RESP_POLE = "resp_pole",
+  AGENT = "agent"
+}

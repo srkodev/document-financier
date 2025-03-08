@@ -5,13 +5,12 @@ import {
   DialogContent, 
   DialogFooter, 
   DialogHeader, 
-  DialogTitle,
-  DialogTrigger 
+  DialogTitle
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createCategory, fetchCategories } from "@/services/categoryService";
+import { createCategory } from "@/services/categoryService";
 import { useToast } from "@/hooks/use-toast";
 
 export interface AddCategoryDialogProps {

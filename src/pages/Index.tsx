@@ -4,7 +4,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import DashboardSummary from "@/components/dashboard/DashboardSummary";
 import RecentTransactions from "@/components/dashboard/RecentTransactions";
 import BudgetOverview from "@/components/dashboard/BudgetOverview";
-import { Budget, Transaction, InvoiceStatus, TransactionStatus, Invoice } from "@/types";
+import { Budget, Transaction } from "@/types";
 import { fetchBudget } from "@/services/budgetService";
 import { fetchTransactions } from "@/services/transactionService";
 import { fetchInvoices } from "@/services/invoiceService";
@@ -19,12 +19,7 @@ const Index = () => {
     totalBudget: 0
   });
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
-  const [budgetData, setBudgetData] = useState<Budget>({
-    id: "budget1",
-    totalAvailable: 0,
-    totalSpent: 0,
-    categories: {}
-  });
+  const [budgetData, setBudgetData] = useState<Budget | null>(null);
 
   const { toast } = useToast();
 
@@ -35,7 +30,9 @@ const Index = () => {
       try {
         // Fetch budget data
         const budget = await fetchBudget();
-        setBudgetData(budget);
+        if (budget) {
+          setBudgetData(budget);
+        }
 
         // Fetch recent transactions
         const transactions = await fetchTransactions();
@@ -43,14 +40,14 @@ const Index = () => {
 
         // Fetch invoices for summary
         const allInvoices = await fetchInvoices();
-        const pendingInvoices = await fetchInvoices(InvoiceStatus.PENDING);
+        const pendingInvoices = await fetchInvoices("pending");
 
         // Update dashboard data
         setDashboardData({
           totalInvoices: allInvoices.length,
           pendingInvoices: pendingInvoices.length,
-          totalSpent: budget.totalSpent,
-          totalBudget: budget.totalAvailable
+          totalSpent: budget?.totalSpent || 0,
+          totalBudget: budget?.totalAvailable || 0
         });
 
       } catch (error: any) {
@@ -88,7 +85,13 @@ const Index = () => {
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               <RecentTransactions transactions={recentTransactions} />
-              <BudgetOverview budget={budgetData} />
+              {budgetData && <BudgetOverview budget={budgetData} />}
+              {!budgetData && (
+                <div className="bg-white p-6 rounded-lg shadow">
+                  <h2 className="text-lg font-medium mb-4">Budget Vue d'ensemble</h2>
+                  <p className="text-muted-foreground">Aucune donnée de budget disponible</p>
+                </div>
+              )}
             </div>
           </>
         )}

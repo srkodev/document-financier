@@ -10,10 +10,10 @@ export const fetchCategories = async (): Promise<Category[]> => {
 
   if (error) {
     console.error("Error fetching categories:", error);
-    return [];
+    throw error;
   }
 
-  return data as Category[];
+  return data || [];
 };
 
 export const createCategory = async (name: string, description: string = ""): Promise<Category | null> => {
@@ -29,13 +29,13 @@ export const createCategory = async (name: string, description: string = ""): Pr
 
     if (error) {
       console.error("Error creating category:", error);
-      throw new Error(error.message);
+      throw error;
     }
 
     return data as Category;
   } catch (error) {
     console.error("Error in createCategory:", error);
-    return null;
+    throw error;
   }
 };
 
@@ -48,13 +48,13 @@ export const deleteCategory = async (id: string): Promise<boolean> => {
 
     if (error) {
       console.error("Error deleting category:", error);
-      throw new Error(error.message);
+      throw error;
     }
 
     return true;
   } catch (error) {
     console.error("Error in deleteCategory:", error);
-    return false;
+    throw error;
   }
 };
 
@@ -73,12 +73,12 @@ export const updateCategory = async (id: string, name: string, description: stri
 
     if (error) {
       console.error("Error updating category:", error);
-      throw new Error(error.message);
+      throw error;
     }
 
     return data as Category;
   } catch (error) {
     console.error("Error in updateCategory:", error);
-    return null;
+    throw error;
   }
 };

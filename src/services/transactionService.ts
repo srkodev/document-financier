@@ -12,13 +12,13 @@ export const fetchTransactions = async (): Promise<Transaction[]> => {
 
     if (error) {
       console.error("Error fetching transactions:", error);
-      return [];
+      throw error;
     }
 
-    return data as Transaction[];
+    return data || [];
   } catch (error) {
     console.error("Error in fetchTransactions:", error);
-    return [];
+    throw error;
   }
 };
 
@@ -35,13 +35,13 @@ export const createTransaction = async (
 
     if (error) {
       console.error("Error creating transaction:", error);
-      throw new Error(error.message);
+      throw error;
     }
 
     return data as Transaction;
   } catch (error) {
     console.error("Error in createTransaction:", error);
-    return null;
+    throw error;
   }
 };
 
@@ -81,13 +81,13 @@ export const updateTransaction = async (
 
     if (error) {
       console.error("Error updating transaction:", error);
-      throw new Error(error.message);
+      throw error;
     }
 
     return data as Transaction;
   } catch (error) {
     console.error("Error in updateTransaction:", error);
-    return null;
+    throw error;
   }
 };
 
@@ -101,7 +101,7 @@ export const deleteTransaction = async (id: string): Promise<boolean> => {
 
     if (error) {
       console.error("Error deleting transaction:", error);
-      throw new Error(error.message);
+      throw error;
     }
 
     return true;
@@ -126,11 +126,7 @@ export const getTransactionsSummary = async (): Promise<{
 
     if (error) {
       console.error("Error fetching transactions for summary:", error);
-      return {
-        totalCount: 0,
-        totalAmount: 0,
-        recentTransactions: [],
-      };
+      throw error;
     }
 
     const transactions = data as Transaction[];
