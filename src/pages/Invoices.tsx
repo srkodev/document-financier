@@ -129,6 +129,8 @@ const InvoicesPage = () => {
         description: "La facture a été supprimée avec succès.",
       });
       setDeleteDialogOpen(false);
+      setSelectedInvoiceId(null);
+      // Actualiser immédiatement la liste des factures après la suppression
       loadInvoices();
     } catch (error: any) {
       toast({

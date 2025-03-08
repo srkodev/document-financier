@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Invoice, InvoiceStatus } from "@/types";
 import { generateInvoicePDF } from "@/services/pdfService";
