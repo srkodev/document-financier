@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,15 +12,36 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { InvoiceStatus } from "@/types";
-import { Loader2, FileUp } from "lucide-react";
+import { InvoiceStatus, Article } from "@/types";
+import { Loader2, FileUp, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useQuery } from "@tanstack/react-query";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+
+interface InvoiceItem {
+  article_id: string;
+  quantity: number;
+  name: string;
+  priceHT: number;
+  vatRate: number;
+}
 
 const formSchema = z.object({
   description: z.string().min(3, "La description doit contenir au moins 3 caractères"),
-  amount: z.coerce.number().min(0.01, "Le montant doit être supérieur à 0"),
   category: z.string().min(1, "Veuillez sélectionner une catégorie"),
   status: z.string().default(InvoiceStatus.PENDING),
+  items: z.array(
+    z.object({
+      article_id: z.string(),
+      quantity: z.number().min(1, "La quantité doit être d'au moins 1"),
+      name: z.string(),
+      priceHT: z.number(),
+      vatRate: z.number()
+    })
+  ).optional().default([]),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -33,20 +54,55 @@ interface InvoiceFormProps {
 
 const categories = ["Matériel", "Fournitures", "Événement", "Transport", "Remboursement", "Autre"];
 
+const fetchArticles = async (userId: string) => {
+  const { data, error } = await supabase
+    .from("articles")
+    .select("*")
+    .eq("user_id", userId)
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+
+  return data.map((item) => ({
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    priceHT: item.price_ht,
+    vatRate: item.vat_rate,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    user_id: item.user_id,
+  })) as Article[];
+};
+
 const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [selectedArticleId, setSelectedArticleId] = useState<string>("");
+  const [quantity, setQuantity] = useState<number>(1);
+
+  const { data: articles = [] } = useQuery({
+    queryKey: ["user-articles"],
+    queryFn: () => fetchArticles(user?.id || ""),
+    enabled: !!user && open,
+  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       description: "",
-      amount: undefined,
       category: "",
       status: InvoiceStatus.PENDING,
+      items: [],
     },
   });
+
+  // Mettre à jour le formulaire quand les items changent
+  useEffect(() => {
+    form.setValue("items", items);
+  }, [items, form]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -54,11 +110,55 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
     }
   };
 
+  const addItem = () => {
+    if (!selectedArticleId) return;
+    
+    const article = articles.find(a => a.id === selectedArticleId);
+    if (!article) return;
+    
+    const newItem: InvoiceItem = {
+      article_id: article.id,
+      quantity: quantity,
+      name: article.name,
+      priceHT: article.priceHT,
+      vatRate: article.vatRate
+    };
+    
+    setItems([...items, newItem]);
+    setSelectedArticleId("");
+    setQuantity(1);
+  };
+  
+  const removeItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const calculateTotal = () => {
+    const totalHT = items.reduce((sum, item) => sum + (item.priceHT * item.quantity), 0);
+    const totalTVA = items.reduce((sum, item) => sum + (item.priceHT * item.quantity * item.vatRate / 100), 0);
+    const totalTTC = totalHT + totalTVA;
+    
+    return { totalHT, totalTVA, totalTTC };
+  };
+
   const onSubmit = async (values: FormValues) => {
     if (!user) return;
     
+    // Vérifier qu'au moins un article a été ajouté
+    if (items.length === 0) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez ajouter au moins un article à la facture",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setLoading(true);
     try {
+      // Calculer le montant total
+      const { totalTTC } = calculateTotal();
+      
       // Générer un numéro de facture
       const invoiceNumber = `INV-${Date.now().toString().substring(6)}`;
       
@@ -85,17 +185,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
       }
       
       // Insérer la facture dans la base de données
-      const { error } = await supabase.from('invoices').insert({
+      const { data: invoice, error } = await supabase.from('invoices').insert({
         number: invoiceNumber,
         user_id: user.id,
         description: values.description,
-        amount: values.amount,
+        amount: totalTTC,
         status: values.status,
         category: values.category,
         pdf_url: pdfUrl,
-      });
+      }).select().single();
       
       if (error) throw error;
+      
+      // Si des articles sont associés, insérer les détails de la facture (cette table doit être créée séparément)
+      // Remarque: Cela nécessiterait l'ajout d'une table invoice_items dans votre schéma SQL
       
       toast({
         title: "Facture créée",
@@ -103,6 +206,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
       });
       
       form.reset();
+      setItems([]);
       setFile(null);
       onOpenChange(false);
       
@@ -121,7 +225,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Nouvelle facture</DialogTitle>
         </DialogHeader>
@@ -136,20 +240,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
                   <FormLabel>Description</FormLabel>
                   <FormControl>
                     <Textarea placeholder="Description de la facture..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Montant (€)</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.01" placeholder="0.00" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -181,6 +271,101 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
               )}
             />
             
+            <div>
+              <Label>Articles</Label>
+              
+              <div className="flex flex-col space-y-2 mt-2">
+                <div className="flex space-x-2">
+                  <Select value={selectedArticleId} onValueChange={setSelectedArticleId}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Sélectionner un article" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {articles.map((article) => (
+                        <SelectItem key={article.id} value={article.id}>
+                          {article.name} - {article.priceHT.toFixed(2)}€ HT
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  <Input
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                    min="1"
+                    max="100"
+                    className="w-20"
+                  />
+                  
+                  <Button type="button" onClick={addItem} disabled={!selectedArticleId}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                {articles.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Vous n'avez pas encore créé d'articles. 
+                    <Button 
+                      variant="link" 
+                      className="p-0 h-auto text-sm"
+                      onClick={() => {
+                        onOpenChange(false);
+                        // Rediriger vers la page des articles
+                        window.location.href = "/articles";
+                      }}
+                    >
+                      Créez-en un maintenant.
+                    </Button>
+                  </p>
+                )}
+                
+                {items.length > 0 && (
+                  <Card className="p-3 mt-3">
+                    <ScrollArea className="max-h-40">
+                      <div className="space-y-2">
+                        {items.map((item, index) => (
+                          <div key={index} className="flex justify-between items-center">
+                            <div>
+                              <div className="flex items-center">
+                                <span className="font-medium">{item.name}</span>
+                                <Badge variant="outline" className="ml-2">
+                                  {item.quantity} x {item.priceHT.toFixed(2)}€ HT
+                                </Badge>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                TVA: {item.vatRate}% | Total: {((item.priceHT * item.quantity) * (1 + item.vatRate / 100)).toFixed(2)}€ TTC
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    
+                    <Separator className="my-3" />
+                    
+                    <div className="text-sm space-y-1">
+                      <div className="flex justify-between">
+                        <span>Total HT:</span>
+                        <span>{calculateTotal().totalHT.toFixed(2)}€</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total TVA:</span>
+                        <span>{calculateTotal().totalTVA.toFixed(2)}€</span>
+                      </div>
+                      <div className="flex justify-between font-bold">
+                        <span>Total TTC:</span>
+                        <span>{calculateTotal().totalTTC.toFixed(2)}€</span>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="file">Pièce jointe (PDF)</Label>
               <div className="flex items-center gap-2">
@@ -199,7 +384,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ open, onOpenChange, onSuccess
             </div>
             
             <DialogFooter>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading || items.length === 0}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

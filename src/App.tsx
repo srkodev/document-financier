@@ -8,6 +8,8 @@ import { AuthProvider } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/layout/ProtectedRoute";
 import Index from "./pages/Index";
 import Invoices from "./pages/Invoices";
+import Articles from "./pages/Articles";
+import Reimbursements from "./pages/Reimbursements";
 import Transactions from "./pages/Transactions";
 import Settings from "./pages/Settings";
 import Budget from "./pages/Budget";
@@ -29,6 +31,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+            <Route path="/articles" element={<ProtectedRoute><Articles /></ProtectedRoute>} />
+            <Route path="/reimbursements" element={<ProtectedRoute><Reimbursements /></ProtectedRoute>} />
             <Route path="/transactions" element={<ProtectedRoute requireRespPole><Transactions /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/budget" element={<ProtectedRoute requireRespPole><Budget /></ProtectedRoute>} />
