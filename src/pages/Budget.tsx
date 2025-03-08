@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BudgetHistory from "@/components/budget/BudgetHistory";
 import BudgetAnalytics from "@/components/budget/BudgetAnalytics";
 import BudgetManagement from "@/components/budget/BudgetManagement";
+import CategoryManager from "@/components/categories/CategoryManager";
 
 const BudgetPage = () => {
   return (
@@ -17,12 +18,17 @@ const BudgetPage = () => {
           <Tabs defaultValue="management" className="w-full space-y-6">
             <TabsList className="mb-4">
               <TabsTrigger value="management">Gestion</TabsTrigger>
+              <TabsTrigger value="categories">Catégories</TabsTrigger>
               <TabsTrigger value="analytics">Analyse</TabsTrigger>
               <TabsTrigger value="history">Historique</TabsTrigger>
             </TabsList>
             
             <TabsContent value="management" className="mt-0">
               <BudgetManagement />
+            </TabsContent>
+            
+            <TabsContent value="categories" className="mt-0">
+              <CategoryManager />
             </TabsContent>
             
             <TabsContent value="analytics" className="mt-0">

@@ -1,142 +1,113 @@
 
-import React from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
+import React, { useState } from "react";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogFooter, 
+  DialogHeader, 
   DialogTitle,
+  DialogTrigger 
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BudgetCategory } from "@/types";
+import { createCategory, fetchCategories } from "@/services/categoryService";
 import { useToast } from "@/hooks/use-toast";
 
-interface AddCategoryDialogProps {
+export interface AddCategoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddCategory: (name: string, category: BudgetCategory) => void;
-  existingCategories: string[];
+  onCategoryAdded: (categoryName: string) => void;
+  categories: string[];
 }
 
 const AddCategoryDialog: React.FC<AddCategoryDialogProps> = ({
   open,
   onOpenChange,
-  onAddCategory,
-  existingCategories,
+  onCategoryAdded,
+  categories
 }) => {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const [categoryName, setCategoryName] = React.useState("");
-  const [allocated, setAllocated] = React.useState<number>(0);
-  const [description, setDescription] = React.useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
-    if (!categoryName.trim()) {
+    if (!name.trim()) {
       toast({
-        title: "Erreur",
-        description: "Le nom de la catégorie est requis",
+        title: "Error",
+        description: "Category name is required",
         variant: "destructive",
       });
       return;
     }
 
-    if (existingCategories.includes(categoryName)) {
+    if (categories.includes(name)) {
       toast({
-        title: "Erreur",
-        description: "Cette catégorie existe déjà",
+        title: "Error",
+        description: "A category with this name already exists",
         variant: "destructive",
       });
       return;
     }
 
-    if (allocated <= 0) {
+    setLoading(true);
+    try {
+      const result = await createCategory(name, description);
+      if (result) {
+        toast({
+          title: "Success",
+          description: "Category added successfully",
+        });
+        setName("");
+        setDescription("");
+        onCategoryAdded(name);
+        onOpenChange(false);
+      }
+    } catch (error) {
+      console.error("Error adding category:", error);
       toast({
-        title: "Erreur",
-        description: "Le montant alloué doit être supérieur à 0",
+        title: "Error",
+        description: "Failed to add category",
         variant: "destructive",
       });
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    // Création de la catégorie
-    const newCategory: BudgetCategory = {
-      allocated,
-      spent: 0,
-      description,
-      lastUpdated: new Date().toISOString(),
-    };
-
-    onAddCategory(categoryName, newCategory);
-    
-    // Réinitialisation des champs
-    setCategoryName("");
-    setAllocated(0);
-    setDescription("");
-    
-    // Fermeture du dialogue
-    onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Ajouter une nouvelle catégorie</DialogTitle>
-            <DialogDescription>
-              Créez une nouvelle catégorie budgétaire avec un montant alloué.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Nom
-              </Label>
-              <Input
-                id="name"
-                value={categoryName}
-                onChange={(e) => setCategoryName(e.target.value)}
-                className="col-span-3"
-                placeholder="ex: Matériel informatique"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="allocated" className="text-right">
-                Montant
-              </Label>
-              <Input
-                id="allocated"
-                type="number"
-                value={allocated}
-                onChange={(e) => setAllocated(Number(e.target.value))}
-                className="col-span-3"
-                min={0}
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">
-                Description
-              </Label>
-              <Input
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="col-span-3"
-                placeholder="Description optionnelle"
-              />
-            </div>
+        <DialogHeader>
+          <DialogTitle>Add New Category</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Category Name</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter category name"
+              required
+            />
           </div>
-          
+          <div className="space-y-2">
+            <Label htmlFor="description">Description (Optional)</Label>
+            <Input
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter a brief description"
+            />
+          </div>
           <DialogFooter>
-            <Button type="submit">Ajouter</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Adding..." : "Add Category"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

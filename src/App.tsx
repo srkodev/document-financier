@@ -1,47 +1,42 @@
 
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
-import ProtectedRoute from "@/components/layout/ProtectedRoute";
-import Index from "./pages/Index";
-import Invoices from "./pages/Invoices";
-import Articles from "./pages/Articles";
-import Reimbursements from "./pages/Reimbursements";
-import Transactions from "./pages/Transactions";
-import Settings from "./pages/Settings";
-import Budget from "./pages/Budget";
-import Users from "./pages/Users";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
+import Index from "@/pages/Index";
+import Auth from "@/pages/Auth";
+import Invoices from "@/pages/Invoices";
+import Articles from "@/pages/Articles";
+import Reimbursements from "@/pages/Reimbursements";
+import Budget from "@/pages/Budget";
+import Transactions from "@/pages/Transactions";
+import Settings from "@/pages/Settings";
+import Users from "@/pages/Users";
+import NotFound from "@/pages/NotFound";
 
-const queryClient = new QueryClient();
+import './App.css';
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <AuthProvider>
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/invoices" element={<Invoices />} />
+          <Route path="/articles" element={<Articles />} />
+          <Route path="/reimbursements" element={<Reimbursements />} />
+          <Route path="/budget" element={<Budget />} />
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/transactions/new" element={<Transactions />} />
+          <Route path="/transactions/:id/edit" element={<Transactions />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
         <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
-            <Route path="/articles" element={<ProtectedRoute><Articles /></ProtectedRoute>} />
-            <Route path="/reimbursements" element={<ProtectedRoute><Reimbursements /></ProtectedRoute>} />
-            <Route path="/transactions" element={<ProtectedRoute requireRespPole><Transactions /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-            <Route path="/budget" element={<ProtectedRoute requireRespPole><Budget /></ProtectedRoute>} />
-            <Route path="/users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+      </Router>
+    </AuthProvider>
+  );
+}
 
 export default App;

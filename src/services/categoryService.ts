@@ -16,50 +16,69 @@ export const fetchCategories = async (): Promise<Category[]> => {
   return data as Category[];
 };
 
-export const createCategory = async (name: string, description: string = ""): Promise<Category> => {
-  const { data, error } = await supabase
-    .from("categories")
-    .insert({
-      name,
-      description,
-    })
-    .select()
-    .single();
+export const createCategory = async (name: string, description: string = ""): Promise<Category | null> => {
+  try {
+    const { data, error } = await supabase
+      .from("categories")
+      .insert([{
+        name,
+        description
+      }])
+      .select()
+      .single();
 
-  if (error) {
-    throw new Error(error.message);
+    if (error) {
+      console.error("Error creating category:", error);
+      throw new Error(error.message);
+    }
+
+    return data as Category;
+  } catch (error) {
+    console.error("Error in createCategory:", error);
+    return null;
   }
-
-  return data as Category;
 };
 
 export const deleteCategory = async (id: string): Promise<boolean> => {
-  const { error } = await supabase
-    .from("categories")
-    .delete()
-    .eq("id", id);
+  try {
+    const { error } = await supabase
+      .from("categories")
+      .delete()
+      .eq("id", id);
 
-  if (error) {
-    throw new Error(error.message);
+    if (error) {
+      console.error("Error deleting category:", error);
+      throw new Error(error.message);
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error in deleteCategory:", error);
+    return false;
   }
-
-  return true;
 };
 
-export const updateCategory = async (id: string, name: string, description: string = ""): Promise<Category> => {
-  const { data, error } = await supabase
-    .from("categories")
-    .update({
-      name,
-      description,
-    })
-    .eq("id", id)
-    .select()
-    .single();
+export const updateCategory = async (id: string, name: string, description: string = ""): Promise<Category | null> => {
+  try {
+    const { data, error } = await supabase
+      .from("categories")
+      .update({
+        name,
+        description,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id)
+      .select()
+      .single();
 
-  if (error) {
-    throw new Error(error.message);
+    if (error) {
+      console.error("Error updating category:", error);
+      throw new Error(error.message);
+    }
+
+    return data as Category;
+  } catch (error) {
+    console.error("Error in updateCategory:", error);
+    return null;
   }
-
-  return data as Category;
 };
