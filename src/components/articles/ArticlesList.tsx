@@ -19,27 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-const fetchArticles = async () => {
-  const { data, error } = await supabase
-    .from("articles")
-    .select("*")
-    .order("name", { ascending: true });
-
-  if (error) throw error;
-
-  // Transformer les données pour respecter l'interface Article
-  return data.map((item) => ({
-    id: item.id,
-    name: item.name,
-    description: item.description,
-    priceHT: item.price_ht,
-    vatRate: item.vat_rate,
-    user_id: item.user_id,
-    created_at: item.created_at,
-    updated_at: item.updated_at,
-  })) as Article[];
-};
+import { fetchArticles } from "@/services/articleService";
 
 const ArticlesList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");

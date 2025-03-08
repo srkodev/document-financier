@@ -18,6 +18,8 @@ import {
 
 type SidebarProps = {
   className?: string;
+  isOpen?: boolean;
+  onClose?: () => void;
 };
 
 type NavItem = {
@@ -28,7 +30,7 @@ type NavItem = {
   requireRespPole?: boolean;
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ className }) => {
+const Sidebar: React.FC<SidebarProps> = ({ className, isOpen, onClose }) => {
   const { isAdmin, isRespPole } = useAuth();
 
   const navItems: NavItem[] = [
@@ -92,6 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
     <aside
       className={cn(
         'bg-background border-r border-border h-screen p-4 w-64 flex flex-col',
+        isOpen ? 'fixed inset-y-0 left-0 z-50' : 'hidden md:flex',
         className
       )}
     >
@@ -112,6 +115,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className }) => {
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               )
             }
+            onClick={onClose}
           >
             <item.icon className="h-4 w-4 mr-3" />
             {item.label}

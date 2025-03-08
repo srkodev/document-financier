@@ -2,20 +2,28 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Article } from "@/types";
 
-// Fonction pour récupérer tous les articles d'un utilisateur
-export const fetchArticles = async () => {
-  try {
-    const user = await supabase.auth.getUser();
-    if (!user.data.user) throw new Error("Utilisateur non authentifié");
+// Transformation des données de la base vers notre modèle Article
+const mapToArticle = (item: any): Article => ({
+  id: item.id,
+  name: item.name,
+  description: item.description,
+  priceHT: item.price_ht,
+  vatRate: item.vat_rate,
+  created_at: item.created_at,
+  updated_at: item.updated_at,
+  user_id: item.user_id,
+});
 
+// Fonction pour récupérer tous les articles
+export const fetchArticles = async (): Promise<Article[]> => {
+  try {
     const { data, error } = await supabase
       .from("articles")
       .select("*")
-      .eq("user_id", user.data.user.id)
       .order("name", { ascending: true });
 
     if (error) throw new Error(error.message);
-    return data as Article[];
+    return data.map(mapToArticle);
   } catch (error: any) {
     console.error("Error fetching articles:", error);
     return [];
@@ -23,7 +31,7 @@ export const fetchArticles = async () => {
 };
 
 // Fonction pour créer un nouvel article
-export const createArticle = async (article: Omit<Article, "id" | "created_at" | "updated_at" | "user_id">) => {
+export const createArticle = async (article: Omit<Article, "id" | "created_at" | "updated_at" | "user_id">): Promise<Article> => {
   try {
     const user = await supabase.auth.getUser();
     if (!user.data.user) throw new Error("Utilisateur non authentifié");
@@ -42,16 +50,7 @@ export const createArticle = async (article: Omit<Article, "id" | "created_at" |
 
     if (error) throw new Error(error.message);
     
-    return {
-      id: data.id,
-      name: data.name,
-      description: data.description,
-      priceHT: data.price_ht,
-      vatRate: data.vat_rate,
-      created_at: data.created_at,
-      updated_at: data.updated_at,
-      user_id: data.user_id,
-    } as Article;
+    return mapToArticle(data);
   } catch (error: any) {
     console.error("Error creating article:", error);
     throw error;
@@ -59,11 +58,8 @@ export const createArticle = async (article: Omit<Article, "id" | "created_at" |
 };
 
 // Fonction pour mettre à jour un article
-export const updateArticle = async (id: string, article: Partial<Omit<Article, "id" | "created_at" | "updated_at" | "user_id">>) => {
+export const updateArticle = async (id: string, article: Partial<Omit<Article, "id" | "created_at" | "updated_at" | "user_id">>): Promise<Article> => {
   try {
-    const user = await supabase.auth.getUser();
-    if (!user.data.user) throw new Error("Utilisateur non authentifié");
-
     const updateData: any = {};
     if (article.name !== undefined) updateData.name = article.name;
     if (article.description !== undefined) updateData.description = article.description;
@@ -74,22 +70,12 @@ export const updateArticle = async (id: string, article: Partial<Omit<Article, "
       .from("articles")
       .update(updateData)
       .eq("id", id)
-      .eq("user_id", user.data.user.id)
       .select()
       .single();
 
     if (error) throw new Error(error.message);
     
-    return {
-      id: data.id,
-      name: data.name,
-      description: data.description,
-      priceHT: data.price_ht,
-      vatRate: data.vat_rate,
-      created_at: data.created_at,
-      updated_at: data.updated_at,
-      user_id: data.user_id,
-    } as Article;
+    return mapToArticle(data);
   } catch (error: any) {
     console.error("Error updating article:", error);
     throw error;
@@ -97,16 +83,12 @@ export const updateArticle = async (id: string, article: Partial<Omit<Article, "
 };
 
 // Fonction pour supprimer un article
-export const deleteArticle = async (id: string) => {
+export const deleteArticle = async (id: string): Promise<boolean> => {
   try {
-    const user = await supabase.auth.getUser();
-    if (!user.data.user) throw new Error("Utilisateur non authentifié");
-
     const { error } = await supabase
       .from("articles")
       .delete()
-      .eq("id", id)
-      .eq("user_id", user.data.user.id);
+      .eq("id", id);
 
     if (error) throw new Error(error.message);
     return true;
