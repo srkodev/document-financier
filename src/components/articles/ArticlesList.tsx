@@ -141,15 +141,15 @@ const ArticlesList: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <p className="font-medium">Prix HT</p>
-                    <p>{article.priceHT.toFixed(2)} €</p>
+                    <p>{article.price_ht.toFixed(2)} €</p>
                   </div>
                   <div>
                     <p className="font-medium">TVA</p>
-                    <p>{article.vatRate}%</p>
+                    <p>{article.vat_rate}%</p>
                   </div>
                   <div>
                     <p className="font-medium">Prix TTC</p>
-                    <p>{(article.priceHT * (1 + article.vatRate / 100)).toFixed(2)} €</p>
+                    <p>{(article.price_ht * (1 + article.vat_rate / 100)).toFixed(2)} €</p>
                   </div>
                 </div>
               </CardContent>

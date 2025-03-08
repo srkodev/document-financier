@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Budget, BudgetCategory, BudgetHistoryEntry } from "@/types";
 import { Json } from "@/integrations/supabase/types";
 
-// Fonction pour récupérer le budget actuel
+// Function to fetch the current budget
 export const fetchBudget = async (): Promise<Budget> => {
   try {
     const { data, error } = await supabase
@@ -15,11 +15,11 @@ export const fetchBudget = async (): Promise<Budget> => {
 
     if (error) {
       if (error.code === "PGRST116") {
-        // Aucun budget trouvé, renvoyer un budget par défaut
+        // No budget found, return a default budget
         return {
           id: "default",
-          totalAvailable: 0,
-          totalSpent: 0,
+          total_available: 0,
+          total_spent: 0,
           categories: {}
         };
       }
@@ -31,25 +31,25 @@ export const fetchBudget = async (): Promise<Budget> => {
     console.error("Error fetching budget:", error);
     return {
       id: "default",
-      totalAvailable: 0,
-      totalSpent: 0,
+      total_available: 0,
+      total_spent: 0,
       categories: {}
     };
   }
 };
 
-// Fonction pour mettre à jour le budget
+// Function to update the budget
 export const updateBudget = async (budget: Budget): Promise<Budget> => {
-  // Convertir les catégories en JSON compatible avec Supabase
+  // Convert categories to JSON compatible with Supabase
   const categoriesJson = convertCategoriesToJson(budget.categories || {});
   
-  // Si c'est un nouveau budget (sans ID ou avec ID par défaut)
+  // If it's a new budget (without ID or with default ID)
   if (!budget.id || budget.id === "default") {
     const { data, error } = await supabase
       .from("budgets")
       .insert({
-        total_available: budget.totalAvailable,
-        total_spent: budget.totalSpent,
+        total_available: budget.total_available,
+        total_spent: budget.total_spent,
         categories: categoriesJson,
       })
       .select()
@@ -63,8 +63,8 @@ export const updateBudget = async (budget: Budget): Promise<Budget> => {
     const { data, error } = await supabase
       .from("budgets")
       .update({
-        total_available: budget.totalAvailable,
-        total_spent: budget.totalSpent,
+        total_available: budget.total_available,
+        total_spent: budget.total_spent,
         categories: categoriesJson,
         updated_at: new Date().toISOString(),
       })
@@ -77,9 +77,9 @@ export const updateBudget = async (budget: Budget): Promise<Budget> => {
   }
 };
 
-// Convertit les catégories de budget en format JSON compatible avec Supabase
+// Convert budget categories to JSON format compatible with Supabase
 const convertCategoriesToJson = (categories: Record<string, BudgetCategory>): Json => {
-  // Créer un objet simple qui peut être sérialisé en JSON
+  // Create a simple object that can be serialized to JSON
   const jsonCategories: Record<string, any> = {};
   
   Object.entries(categories).forEach(([key, category]) => {
@@ -94,7 +94,7 @@ const convertCategoriesToJson = (categories: Record<string, BudgetCategory>): Js
   return jsonCategories as Json;
 };
 
-// Fonction pour récupérer l'historique des modifications du budget
+// Function to fetch budget history
 export const fetchBudgetHistory = async (): Promise<BudgetHistoryEntry[]> => {
   try {
     const { data, error } = await supabase
@@ -110,7 +110,7 @@ export const fetchBudgetHistory = async (): Promise<BudgetHistoryEntry[]> => {
   }
 };
 
-// Fonction pour enregistrer une modification dans l'historique
+// Function to save a history entry
 export const saveBudgetHistoryEntry = async (description: string, details: string): Promise<boolean> => {
   try {
     const { error } = await supabase
@@ -129,9 +129,9 @@ export const saveBudgetHistoryEntry = async (description: string, details: strin
   }
 };
 
-// Fonction utilitaire pour convertir les données de la base en objet Budget
+// Utility function to convert database data to Budget object
 const mapToBudget = (data: any): Budget => {
-  // Convertir les catégories JSON en objets BudgetCategory
+  // Convert JSON categories to BudgetCategory objects
   const categories: Record<string, BudgetCategory> = {};
   
   if (data.categories) {
@@ -147,11 +147,11 @@ const mapToBudget = (data: any): Budget => {
   
   return {
     id: data.id,
-    totalAvailable: data.total_available,
-    totalSpent: data.total_spent,
+    total_available: data.total_available,
+    total_spent: data.total_spent,
     categories: categories,
-    fiscalYear: data.fiscal_year,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at
+    fiscal_year: data.fiscal_year,
+    created_at: data.created_at,
+    updated_at: data.updated_at
   };
 };

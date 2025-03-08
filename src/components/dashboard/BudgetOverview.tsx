@@ -1,7 +1,7 @@
 
 import React from "react";
 import DataCard from "../ui-custom/DataCard";
-import { Budget } from "@/types";
+import { Budget, BudgetCategory } from "@/types";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
 interface BudgetOverviewProps {
@@ -13,13 +13,13 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 const BudgetOverview: React.FC<BudgetOverviewProps> = ({ budget }) => {
   // Extract data for the pie chart
   const data = budget.categories 
-    ? Object.entries(budget.categories).map(([name, { allocated, spent }], index) => ({
+    ? Object.entries(budget.categories).map(([name, category], index) => ({
         name,
-        value: spent,
-        allocated,
+        value: category.spent,
+        allocated: category.allocated,
         color: COLORS[index % COLORS.length]
       }))
-    : [{ name: "Total", value: budget.totalSpent, allocated: budget.totalAvailable, color: COLORS[0] }];
+    : [{ name: "Total", value: budget.total_spent, allocated: budget.total_available, color: COLORS[0] }];
   
   return (
     <DataCard

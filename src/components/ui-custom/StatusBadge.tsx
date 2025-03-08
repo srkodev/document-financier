@@ -27,8 +27,16 @@ const statusConfig = {
     color: "bg-status-processing text-white",
     label: "En cours"
   },
-  // Transaction statuses - using different keys to avoid duplicate property names
-  [TransactionStatus.PENDING + "_transaction"]: {
+  [InvoiceStatus.PAID]: {
+    color: "bg-status-approved text-white",
+    label: "Payé"
+  },
+  [InvoiceStatus.DRAFT]: {
+    color: "bg-gray-500 text-white",
+    label: "Brouillon"
+  },
+  // Transaction statuses
+  [TransactionStatus.PENDING]: {
     color: "bg-status-pending text-white",
     label: "En attente"
   },
@@ -40,19 +48,14 @@ const statusConfig = {
     color: "bg-status-rejected text-white",
     label: "Annulé"
   },
-  [TransactionStatus.PROCESSING + "_transaction"]: {
+  [TransactionStatus.PROCESSING]: {
     color: "bg-status-processing text-white",
     label: "En cours"
   }
 };
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className }) => {
-  // Determine which key to use in the config based on the status
-  const configKey = Object.keys(statusConfig).includes(status) 
-    ? status 
-    : status + "_transaction";
-  
-  const config = statusConfig[configKey as keyof typeof statusConfig] || {
+  const config = statusConfig[status as keyof typeof statusConfig] || {
     color: "bg-gray-500 text-white",
     label: status
   };

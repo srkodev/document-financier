@@ -2,7 +2,7 @@
 import React from "react";
 import DataCard from "../ui-custom/DataCard";
 import StatusBadge from "../ui-custom/StatusBadge";
-import { Transaction } from "@/types";
+import { Transaction, TransactionStatus } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({ transactions })
                 <span className={`font-semibold ${transaction.amount > 0 ? 'text-status-approved' : 'text-status-rejected'}`}>
                   {transaction.amount.toLocaleString('fr-FR')} €
                 </span>
-                <StatusBadge status={transaction.status} />
+                <StatusBadge status={transaction.status as TransactionStatus} />
               </div>
             </div>
           ))

@@ -5,18 +5,18 @@ import { Invoice, InvoiceStatus } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDate } from '@/lib/utils';
 
-// Fonction pour générer un PDF pour une facture
+// Function to generate a PDF for an invoice
 export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
   try {
     const doc = new jsPDF();
     
-    // Configuration de la page
+    // Page configuration
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
     const contentWidth = pageWidth - margin * 2;
     let yPos = 20;
     
-    // En-tête du document
+    // Document header
     doc.setFontSize(18);
     doc.setTextColor(0, 0, 0);
     doc.text("FACTURE", pageWidth / 2, yPos, { align: "center" });
@@ -27,7 +27,7 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
     
     yPos += 15;
     
-    // Informations de l'entreprise
+    // Company information
     doc.setFontSize(10);
     doc.text("ÉMETTEUR", margin, yPos);
     yPos += 5;
@@ -47,7 +47,7 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
     yPos += 5;
     doc.text("TVA Intracom: FR12345678900", margin, yPos);
     
-    // Informations du client
+    // Client information
     yPos = 60;
     doc.setFontSize(10);
     doc.text("DESTINATAIRE", pageWidth - margin - 80, yPos);
@@ -64,7 +64,7 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
     yPos += 5;
     doc.text("Code postal, Ville", pageWidth - margin - 80, yPos);
     
-    // Informations sur la facture
+    // Invoice information
     yPos = 90;
     doc.setFontSize(10);
     
@@ -77,17 +77,17 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
     yPos += 5;
     doc.text(`Date d'échéance: ${dateEcheance}`, margin, yPos);
     yPos += 5;
-    doc.text(`Statut: ${translateStatus(invoice.status)}`, margin, yPos);
+    doc.text(`Statut: ${translateStatus(invoice.status as InvoiceStatus)}`, margin, yPos);
     
     yPos += 15;
     
-    // Description de la facture
+    // Invoice description
     doc.setFontSize(11);
     doc.text(`Description: ${invoice.description || "N/A"}`, margin, yPos);
     
     yPos += 15;
     
-    // Tableau des détails
+    // Details table
     const tableHeaders = [["Description", "Montant HT", "TVA", "Montant TTC"]];
     const tableRows = [[
       invoice.description || "Services",
@@ -109,7 +109,7 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
     
     yPos = (doc as any).lastAutoTable.finalY + 20;
     
-    // Récapitulatif des montants
+    // Amount summary
     doc.setFontSize(10);
     doc.text("Total HT:", pageWidth - margin - 60, yPos);
     doc.setFont("helvetica", "bold");
@@ -125,7 +125,7 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
     doc.text("Total TTC:", pageWidth - margin - 60, yPos);
     doc.text(`${invoice.amount.toFixed(2)} €`, pageWidth - margin, yPos, { align: "right" });
     
-    // Conditions de paiement
+    // Payment terms
     yPos += 20;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
@@ -135,7 +135,7 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
     yPos += 5;
     doc.text("Virement bancaire sur le compte: FR76 1234 5678 9012 3456 7890 123 - BIC: CEPAFRPP123", margin, yPos);
     
-    // Mentions légales
+    // Legal notices
     yPos = doc.internal.pageSize.getHeight() - 30;
     doc.setFontSize(8);
     doc.text("En cas de retard de paiement, une pénalité de 3 fois le taux d'intérêt légal sera appliquée.", margin, yPos);
@@ -144,11 +144,11 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
     yPos += 4;
     doc.text("Dispensé d'immatriculation au registre du commerce et des sociétés (RCS) et au répertoire des métiers (RM).", margin, yPos);
     
-    // Convertir le document en blob
+    // Convert document to blob
     const pdfBlob = doc.output('blob');
     
-    // Si la facture n'a pas encore d'URL PDF, on peut l'enregistrer sur Supabase Storage
-    // et mettre à jour l'enregistrement de la facture
+    // If the invoice doesn't have a PDF URL yet, we can save it to Supabase Storage
+    // and update the invoice record
     if (!invoice.pdf_url) {
       try {
         const user = await supabase.auth.getUser();
@@ -166,12 +166,12 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
         if (error) {
           console.error("Erreur lors de l'upload du PDF:", error);
         } else {
-          // Obtenir l'URL du fichier
+          // Get the file URL
           const { data: urlData } = supabase.storage
             .from('documents')
             .getPublicUrl(filename);
           
-          // Mettre à jour l'enregistrement de la facture avec l'URL du PDF
+          // Update the invoice record with the PDF URL
           const { error: updateError } = await supabase
             .from('invoices')
             .update({ pdf_url: urlData.publicUrl })
@@ -193,7 +193,7 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
   }
 };
 
-// Fonction pour traduire les statuts en français
+// Function to translate status to French
 function translateStatus(status: InvoiceStatus): string {
   switch (status) {
     case InvoiceStatus.PENDING:
@@ -204,6 +204,10 @@ function translateStatus(status: InvoiceStatus): string {
       return "Rejetée";
     case InvoiceStatus.PROCESSING:
       return "En cours";
+    case InvoiceStatus.PAID:
+      return "Payée";
+    case InvoiceStatus.DRAFT:
+      return "Brouillon";
     default:
       return "Inconnu";
   }

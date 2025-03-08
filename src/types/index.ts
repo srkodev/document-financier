@@ -53,8 +53,35 @@ export interface Budget {
   id: string;
   total_available: number;
   total_spent: number;
-  categories: { [key: string]: number };
-  fiscal_year: string;
+  categories: { [key: string]: BudgetCategory };
+  fiscal_year?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BudgetCategory {
+  allocated: number;
+  spent: number;
+  description?: string;
+  lastUpdated?: string;
+}
+
+export interface BudgetHistoryEntry {
+  id: string;
+  user_id: string;
+  user_name?: string;
+  action: string;
+  details: string;
+  created_at: string;
+}
+
+export interface ReimbursementRequest {
+  id: string;
+  invoice_id: string;
+  user_id: string;
+  amount: number;
+  status: string;
+  description: string;
   created_at: string;
   updated_at: string;
 }
@@ -64,13 +91,17 @@ export type Role = "super_admin" | "admin" | "resp_pole" | "agent";
 export enum InvoiceStatus {
   PENDING = "pending",
   PAID = "paid",
-  DRAFT = "draft"
+  DRAFT = "draft",
+  APPROVED = "approved",
+  REJECTED = "rejected",
+  PROCESSING = "processing"
 }
 
 export enum TransactionStatus {
   PENDING = "pending",
   COMPLETED = "completed",
-  CANCELLED = "cancelled"
+  CANCELLED = "cancelled",
+  PROCESSING = "processing"
 }
 
 export enum UserRole {

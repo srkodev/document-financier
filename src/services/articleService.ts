@@ -2,19 +2,18 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Article } from "@/types";
 
-// Transformation des données de la base vers notre modèle Article
+// Function to map database fields to our Article model
 const mapToArticle = (item: any): Article => ({
   id: item.id,
   name: item.name,
   description: item.description,
-  priceHT: item.price_ht,
-  vatRate: item.vat_rate,
+  price_ht: item.price_ht,
+  vat_rate: item.vat_rate,
   created_at: item.created_at,
-  updated_at: item.updated_at,
   user_id: item.user_id,
 });
 
-// Fonction pour récupérer tous les articles
+// Function to fetch all articles
 export const fetchArticles = async (): Promise<Article[]> => {
   try {
     const { data, error } = await supabase
@@ -23,15 +22,15 @@ export const fetchArticles = async (): Promise<Article[]> => {
       .order("name", { ascending: true });
 
     if (error) throw new Error(error.message);
-    return data.map(mapToArticle);
+    return data as Article[];
   } catch (error: any) {
     console.error("Error fetching articles:", error);
     return [];
   }
 };
 
-// Fonction pour créer un nouvel article
-export const createArticle = async (article: Omit<Article, "id" | "created_at" | "updated_at" | "user_id">): Promise<Article> => {
+// Function to create a new article
+export const createArticle = async (article: Omit<Article, "id" | "created_at" | "user_id">): Promise<Article> => {
   try {
     const user = await supabase.auth.getUser();
     if (!user.data.user) throw new Error("Utilisateur non authentifié");
@@ -41,8 +40,8 @@ export const createArticle = async (article: Omit<Article, "id" | "created_at" |
       .insert({
         name: article.name,
         description: article.description || "",
-        price_ht: article.priceHT,
-        vat_rate: article.vatRate,
+        price_ht: article.price_ht,
+        vat_rate: article.vat_rate,
         user_id: user.data.user.id,
       })
       .select()
@@ -50,21 +49,21 @@ export const createArticle = async (article: Omit<Article, "id" | "created_at" |
 
     if (error) throw new Error(error.message);
     
-    return mapToArticle(data);
+    return data as Article;
   } catch (error: any) {
     console.error("Error creating article:", error);
     throw error;
   }
 };
 
-// Fonction pour mettre à jour un article
-export const updateArticle = async (id: string, article: Partial<Omit<Article, "id" | "created_at" | "updated_at" | "user_id">>): Promise<Article> => {
+// Function to update an article
+export const updateArticle = async (id: string, article: Partial<Omit<Article, "id" | "created_at" | "user_id">>): Promise<Article> => {
   try {
     const updateData: any = {};
     if (article.name !== undefined) updateData.name = article.name;
     if (article.description !== undefined) updateData.description = article.description;
-    if (article.priceHT !== undefined) updateData.price_ht = article.priceHT;
-    if (article.vatRate !== undefined) updateData.vat_rate = article.vatRate;
+    if (article.price_ht !== undefined) updateData.price_ht = article.price_ht;
+    if (article.vat_rate !== undefined) updateData.vat_rate = article.vat_rate;
 
     const { data, error } = await supabase
       .from("articles")
@@ -75,14 +74,14 @@ export const updateArticle = async (id: string, article: Partial<Omit<Article, "
 
     if (error) throw new Error(error.message);
     
-    return mapToArticle(data);
+    return data as Article;
   } catch (error: any) {
     console.error("Error updating article:", error);
     throw error;
   }
 };
 
-// Fonction pour supprimer un article
+// Function to delete an article
 export const deleteArticle = async (id: string): Promise<boolean> => {
   try {
     const { error } = await supabase

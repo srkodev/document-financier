@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import ProtectedRoute from "@/components/layout/ProtectedRoute";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,8 +7,35 @@ import BudgetHistory from "@/components/budget/BudgetHistory";
 import BudgetAnalytics from "@/components/budget/BudgetAnalytics";
 import BudgetManagement from "@/components/budget/BudgetManagement";
 import CategoryManager from "@/components/categories/CategoryManager";
+import { fetchBudget } from "@/services/budgetService";
+import { Budget } from "@/types";
+import { useToast } from "@/hooks/use-toast";
 
 const BudgetPage = () => {
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const loadBudget = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchBudget();
+        setBudget(data);
+      } catch (error: any) {
+        toast({
+          title: "Erreur",
+          description: error.message || "Impossible de charger les données du budget",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBudget();
+  }, [toast]);
+
   return (
     <ProtectedRoute requireRespPole>
       <DashboardLayout>
@@ -32,7 +59,17 @@ const BudgetPage = () => {
             </TabsContent>
             
             <TabsContent value="analytics" className="mt-0">
-              <BudgetAnalytics />
+              {budget && <BudgetAnalytics budget={budget} />}
+              {loading && (
+                <div className="flex justify-center items-center p-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                </div>
+              )}
+              {!loading && !budget && (
+                <div className="p-8 text-center">
+                  <p className="text-muted-foreground">Aucune donnée de budget disponible</p>
+                </div>
+              )}
             </TabsContent>
             
             <TabsContent value="history" className="mt-0">

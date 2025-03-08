@@ -23,20 +23,20 @@ interface BudgetAnalyticsProps {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ea489e'];
 
 const BudgetAnalytics: React.FC<BudgetAnalyticsProps> = ({ budget, className }) => {
-  // Préparation des données pour le graphique à barres
+  // Prepare data for the bar chart
   const barData = budget.categories ? 
-    Object.entries(budget.categories).map(([name, { allocated, spent }]) => ({
+    Object.entries(budget.categories).map(([name, category]) => ({
       name,
-      allocated,
-      spent,
-      remaining: allocated - spent
+      allocated: category.allocated,
+      spent: category.spent,
+      remaining: category.allocated - category.spent
     })) : [];
 
-  // Préparation des données pour le graphique en camembert
+  // Prepare data for the pie chart
   const pieData = budget.categories ? 
-    Object.entries(budget.categories).map(([name, { spent }], index) => ({
+    Object.entries(budget.categories).map(([name, category], index) => ({
       name,
-      value: spent,
+      value: category.spent,
       color: COLORS[index % COLORS.length]
     })) : [];
 
@@ -98,19 +98,19 @@ const BudgetAnalytics: React.FC<BudgetAnalyticsProps> = ({ budget, className }) 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-secondary/30 p-4 rounded-lg">
             <h4 className="text-sm font-medium text-muted-foreground">Budget total</h4>
-            <p className="text-2xl font-bold">{moneyFormatter(budget.totalAvailable)}</p>
+            <p className="text-2xl font-bold">{moneyFormatter(budget.total_available)}</p>
           </div>
           <div className="bg-secondary/30 p-4 rounded-lg">
             <h4 className="text-sm font-medium text-muted-foreground">Dépenses totales</h4>
-            <p className="text-2xl font-bold">{moneyFormatter(budget.totalSpent)}</p>
+            <p className="text-2xl font-bold">{moneyFormatter(budget.total_spent)}</p>
           </div>
           <div className="bg-secondary/30 p-4 rounded-lg">
             <h4 className="text-sm font-medium text-muted-foreground">Restant</h4>
-            <p className="text-2xl font-bold">{moneyFormatter(budget.totalAvailable - budget.totalSpent)}</p>
+            <p className="text-2xl font-bold">{moneyFormatter(budget.total_available - budget.total_spent)}</p>
           </div>
           <div className="bg-secondary/30 p-4 rounded-lg">
             <h4 className="text-sm font-medium text-muted-foreground">Utilisation</h4>
-            <p className="text-2xl font-bold">{Math.round((budget.totalSpent / budget.totalAvailable) * 100)}%</p>
+            <p className="text-2xl font-bold">{Math.round((budget.total_spent / budget.total_available) * 100)}%</p>
           </div>
         </div>
       </div>
