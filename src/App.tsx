@@ -13,7 +13,6 @@ import Reimbursements from "./pages/Reimbursements";
 import Transactions from "./pages/Transactions";
 import Settings from "./pages/Settings";
 import Budget from "./pages/Budget";
-import Reports from "./pages/Reports";
 import Users from "./pages/Users";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -36,7 +35,6 @@ const App = () => (
             <Route path="/transactions" element={<ProtectedRoute requireRespPole><Transactions /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/budget" element={<ProtectedRoute requireRespPole><Budget /></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute requireAdmin><Reports /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

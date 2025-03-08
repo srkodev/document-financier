@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import DataCard from "@/components/ui-custom/DataCard";
 import StatusBadge from "@/components/ui-custom/StatusBadge";
@@ -10,78 +10,129 @@ import {
   Plus, 
   ArrowUpRight,
   ArrowDownLeft,
-  Filter
+  Filter,
+  Edit,
+  Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { TransactionStatus } from "@/types";
+import { TransactionStatus, Transaction } from "@/types";
+import { fetchTransactions, createTransaction, updateTransaction, deleteTransaction } from "@/services/transactionService";
+import { useToast } from "@/hooks/use-toast";
+import TransactionForm from "@/components/transactions/TransactionForm";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const Transactions = () => {
+const TransactionsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   
-  // Mock data (in a real app, this would come from an API)
-  const mockTransactions = [
-    {
-      id: "TX001",
-      invoiceId: "INV001",
-      amount: -2500,
-      status: TransactionStatus.COMPLETED,
-      date: new Date(2023, 6, 15),
-      description: "Achat matériel informatique",
-      category: "Matériel"
-    },
-    {
-      id: "TX002",
-      invoiceId: "INV002",
-      amount: -750,
-      status: TransactionStatus.PENDING,
-      date: new Date(2023, 6, 14),
-      description: "Frais de déplacement",
-      category: "Voyage"
-    },
-    {
-      id: "TX003",
-      invoiceId: "INV003",
-      amount: 1200,
-      status: TransactionStatus.PROCESSING,
-      date: new Date(2023, 6, 12),
-      description: "Remboursement client",
-      category: "Remboursement"
-    },
-    {
-      id: "TX004",
-      invoiceId: "INV004",
-      amount: -320,
-      status: TransactionStatus.COMPLETED,
-      date: new Date(2023, 6, 10),
-      description: "Fournitures de bureau",
-      category: "Fournitures"
-    },
-    {
-      id: "TX005",
-      invoiceId: "INV005",
-      amount: -890,
-      status: TransactionStatus.CANCELLED,
-      date: new Date(2023, 6, 8),
-      description: "Équipement de présentation",
-      category: "Matériel"
-    },
-    {
-      id: "TX006",
-      amount: 5000,
-      status: TransactionStatus.COMPLETED,
-      date: new Date(2023, 6, 5),
-      description: "Ajout de budget",
-      category: "Budget"
+  const { toast } = useToast();
+  
+  // Get unique categories from transactions
+  const categories = Array.from(new Set(transactions.map(t => t.category || "Autre").filter(Boolean)));
+  
+  useEffect(() => {
+    loadTransactions();
+  }, [activeTab, selectedCategory, searchTerm]);
+
+  const loadTransactions = async () => {
+    setLoading(true);
+    try {
+      const status = activeTab !== "all" ? activeTab as TransactionStatus : undefined;
+      const category = selectedCategory !== "all" ? selectedCategory : undefined;
+      const data = await fetchTransactions(status, searchTerm, category);
+      setTransactions(data);
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de charger les transactions",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setSelectedCategory(value);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedTransactionId) return;
+
+    try {
+      await deleteTransaction(selectedTransactionId);
+      toast({
+        title: "Transaction supprimée",
+        description: "La transaction a été supprimée avec succès.",
+      });
+      setDeleteDialogOpen(false);
+      loadTransactions();
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de supprimer la transaction",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const confirmDelete = (id: string) => {
+    setSelectedTransactionId(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleEdit = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setIsFormOpen(true);
+  };
   
-  // Filter transactions based on search term
-  const filteredTransactions = mockTransactions.filter(transaction => 
-    transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    transaction.category?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const resetFilters = () => {
+    setSearchTerm("");
+    setSelectedCategory("all");
+    setActiveTab("all");
+  };
+  
+  const calculateTotals = () => {
+    const filteredTransactions = transactions;
+    
+    const expenses = filteredTransactions
+      .filter(t => t.amount < 0)
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      
+    const income = filteredTransactions
+      .filter(t => t.amount > 0)
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const balance = filteredTransactions
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    return { expenses, income, balance };
+  };
+  
+  const { expenses, income, balance } = calculateTotals();
   
   return (
     <DashboardLayout>
@@ -103,12 +154,18 @@ const Transactions = () => {
               />
             </div>
             
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={resetFilters}>
               <Filter className="h-4 w-4" />
-              <span>Filtrer</span>
+              <span>Réinitialiser</span>
             </Button>
             
-            <Button className="gap-2">
+            <Button 
+              className="gap-2" 
+              onClick={() => {
+                setSelectedTransaction(null);
+                setIsFormOpen(true);
+              }}
+            >
               <Plus className="h-4 w-4" />
               <span>Nouvelle transaction</span>
             </Button>
@@ -124,11 +181,7 @@ const Transactions = () => {
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-2xl font-semibold text-status-rejected">
-                  {Math.abs(
-                    mockTransactions
-                      .filter(t => t.amount < 0)
-                      .reduce((sum, t) => sum + t.amount, 0)
-                  ).toLocaleString('fr-FR')} €
+                  {expenses.toLocaleString('fr-FR')} €
                 </p>
               </div>
               <div className="p-3 rounded-full bg-white dark:bg-gray-800 shadow-sm">
@@ -145,10 +198,7 @@ const Transactions = () => {
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-2xl font-semibold text-status-approved">
-                  {mockTransactions
-                    .filter(t => t.amount > 0)
-                    .reduce((sum, t) => sum + t.amount, 0)
-                    .toLocaleString('fr-FR')} €
+                  {income.toLocaleString('fr-FR')} €
                 </p>
               </div>
               <div className="p-3 rounded-full bg-white dark:bg-gray-800 shadow-sm">
@@ -165,9 +215,7 @@ const Transactions = () => {
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-2xl font-semibold">
-                  {mockTransactions
-                    .reduce((sum, t) => sum + t.amount, 0)
-                    .toLocaleString('fr-FR')} €
+                  {balance.toLocaleString('fr-FR')} €
                 </p>
               </div>
               <div className="p-3 rounded-full bg-white dark:bg-gray-800 shadow-sm">
@@ -178,6 +226,31 @@ const Transactions = () => {
         </div>
         
         <DataCard title="Liste des transactions">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+            <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="w-full sm:w-auto">
+              <TabsList>
+                <TabsTrigger value="all">Toutes</TabsTrigger>
+                <TabsTrigger value={TransactionStatus.COMPLETED}>Terminées</TabsTrigger>
+                <TabsTrigger value={TransactionStatus.PENDING}>En attente</TabsTrigger>
+                <TabsTrigger value={TransactionStatus.CANCELLED}>Annulées</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            
+            <div className="flex gap-3">
+              <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Catégorie" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les catégories</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>{category}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -188,18 +261,27 @@ const Transactions = () => {
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Date</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Statut</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Catégorie</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTransactions.length === 0 ? (
+                {loading ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-4 text-muted-foreground">
+                    <td colSpan={7} className="text-center py-8">
+                      <div className="flex justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : transactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-4 text-muted-foreground">
                       Aucune transaction trouvée
                     </td>
                   </tr>
                 ) : (
-                  filteredTransactions.map((transaction, index) => (
-                    <tr key={index} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                  transactions.map((transaction) => (
+                    <tr key={transaction.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3 text-sm">{transaction.id}</td>
                       <td className="px-4 py-3 text-sm">{transaction.description}</td>
                       <td className={`px-4 py-3 text-sm font-medium ${
@@ -211,15 +293,35 @@ const Transactions = () => {
                         {transaction.amount.toLocaleString('fr-FR')} €
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        {format(transaction.date, 'dd MMM yyyy', { locale: fr })}
+                        {format(new Date(transaction.date), 'dd MMM yyyy', { locale: fr })}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <StatusBadge status={transaction.status} />
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="px-2 py-1 bg-secondary rounded-full text-xs">
-                          {transaction.category}
+                          {transaction.category || "Autre"}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            title="Modifier" 
+                            onClick={() => handleEdit(transaction)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            title="Supprimer" 
+                            onClick={() => confirmDelete(transaction.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -229,8 +331,32 @@ const Transactions = () => {
           </div>
         </DataCard>
       </div>
+      
+      <TransactionForm 
+        open={isFormOpen} 
+        onOpenChange={setIsFormOpen} 
+        onSuccess={loadTransactions}
+        transaction={selectedTransaction}
+      />
+      
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Êtes-vous sûr?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action ne peut pas être annulée. Cette transaction sera définitivement supprimée et le budget sera mis à jour en conséquence.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
 
-export default Transactions;
+export default TransactionsPage;

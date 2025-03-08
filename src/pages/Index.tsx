@@ -4,10 +4,13 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import DashboardSummary from "@/components/dashboard/DashboardSummary";
 import RecentTransactions from "@/components/dashboard/RecentTransactions";
 import BudgetOverview from "@/components/dashboard/BudgetOverview";
-import { Budget, Transaction, InvoiceStatus, TransactionStatus } from "@/types";
+import { Budget, Transaction, InvoiceStatus, TransactionStatus, Invoice } from "@/types";
+import { fetchBudget } from "@/services/budgetService";
+import { fetchTransactions } from "@/services/transactionService";
+import { fetchInvoices } from "@/services/invoiceService";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
-  // State for data that would normally come from an API
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState({
     totalInvoices: 0,
@@ -23,78 +26,47 @@ const Index = () => {
     categories: {}
   });
 
-  // Mock API request to get dashboard data
+  const { toast } = useToast();
+
+  // Load data from database
   useEffect(() => {
-    // Simulate API delay
-    const loadData = setTimeout(() => {
-      // Dashboard summary data
-      setDashboardData({
-        totalInvoices: 75,
-        pendingInvoices: 12,
-        totalSpent: 28000,
-        totalBudget: 50000
-      });
+    const loadDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch budget data
+        const budget = await fetchBudget();
+        setBudgetData(budget);
 
-      // Recent transactions
-      setRecentTransactions([
-        {
-          id: "TX001",
-          invoiceId: "INV001",
-          amount: -2500,
-          status: TransactionStatus.COMPLETED,
-          date: new Date(2023, 6, 15),
-          description: "Achat matériel informatique",
-          category: "Matériel"
-        },
-        {
-          id: "TX002",
-          invoiceId: "INV002",
-          amount: -750,
-          status: TransactionStatus.PENDING,
-          date: new Date(2023, 6, 14),
-          description: "Frais de déplacement",
-          category: "Voyage"
-        },
-        {
-          id: "TX003",
-          invoiceId: "INV003",
-          amount: 1200,
-          status: TransactionStatus.PROCESSING,
-          date: new Date(2023, 6, 12),
-          description: "Remboursement client",
-          category: "Remboursement"
-        },
-        {
-          id: "TX004",
-          invoiceId: "INV004",
-          amount: -320,
-          status: TransactionStatus.COMPLETED,
-          date: new Date(2023, 6, 10),
-          description: "Fournitures de bureau",
-          category: "Fournitures"
-        }
-      ]);
+        // Fetch recent transactions
+        const transactions = await fetchTransactions();
+        setRecentTransactions(transactions.slice(0, 5)); // Show only 5 most recent
 
-      // Budget data
-      setBudgetData({
-        id: "budget1",
-        totalAvailable: 50000,
-        totalSpent: 28000,
-        categories: {
-          "Matériel": { allocated: 20000, spent: 15000 },
-          "Voyages": { allocated: 15000, spent: 7000 },
-          "Fournitures": { allocated: 8000, spent: 4000 },
-          "Services": { allocated: 5000, spent: 2000 },
-          "Divers": { allocated: 2000, spent: 0 }
-        }
-      });
+        // Fetch invoices for summary
+        const allInvoices = await fetchInvoices();
+        const pendingInvoices = await fetchInvoices(InvoiceStatus.PENDING);
 
-      setIsLoading(false);
-    }, 1000);
+        // Update dashboard data
+        setDashboardData({
+          totalInvoices: allInvoices.length,
+          pendingInvoices: pendingInvoices.length,
+          totalSpent: budget.totalSpent,
+          totalBudget: budget.totalAvailable
+        });
 
-    // Cleanup function
-    return () => clearTimeout(loadData);
-  }, []);
+      } catch (error: any) {
+        console.error("Error loading dashboard data:", error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de charger les données du tableau de bord",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, [toast]);
 
   return (
     <DashboardLayout>

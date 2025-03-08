@@ -107,18 +107,6 @@ export const createInvoiceWithPDF = async (invoiceData: Partial<Invoice>, items:
   try {
     // Générer le PDF de la facture
     const pdfBlob = await generateInvoicePDF({
-      invoiceNumber: invoiceData.number || '',
-      date: new Date().toISOString(),
-      description: invoiceData.description || '',
-      amount: invoiceData.amount || 0,
-      category: invoiceData.category || '',
-      status: invoiceData.status || InvoiceStatus.PENDING,
-      items: items
-    });
-    
-    // Sauvegarder le PDF dans Supabase Storage
-    const pdfUrl = await saveInvoicePDF({
-      ...invoiceData,
       id: '',
       user_id: invoiceData.user_id || '',
       created_at: new Date().toISOString(),
@@ -126,16 +114,37 @@ export const createInvoiceWithPDF = async (invoiceData: Partial<Invoice>, items:
       number: invoiceData.number || '',
       description: invoiceData.description || '',
       amount: invoiceData.amount || 0,
-      status: invoiceData.status || InvoiceStatus.PENDING
+      status: invoiceData.status || InvoiceStatus.PENDING,
+      category: invoiceData.category || '',
+    });
+    
+    // Sauvegarder le PDF dans Supabase Storage
+    const pdfUrl = await saveInvoicePDF({
+      id: '',
+      user_id: invoiceData.user_id || '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      number: invoiceData.number || '',
+      description: invoiceData.description || '',
+      amount: invoiceData.amount || 0,
+      status: invoiceData.status || InvoiceStatus.PENDING,
+      category: invoiceData.category || '',
     }, pdfBlob);
     
     // Créer la facture dans la base de données avec l'URL du PDF
+    const completeInvoiceData = {
+      ...invoiceData,
+      pdf_url: pdfUrl,
+      number: invoiceData.number || '',
+      description: invoiceData.description || '',
+      amount: invoiceData.amount || 0,
+      status: invoiceData.status || InvoiceStatus.PENDING,
+      user_id: invoiceData.user_id || '',
+    };
+    
     const { data, error } = await supabase
       .from('invoices')
-      .insert({
-        ...invoiceData,
-        pdf_url: pdfUrl
-      })
+      .insert(completeInvoiceData)
       .select()
       .single();
     
