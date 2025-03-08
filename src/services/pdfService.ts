@@ -196,18 +196,14 @@ export const generateInvoicePDF = async (invoice: Invoice): Promise<Blob> => {
 // Fonction pour traduire les statuts en français
 function translateStatus(status: InvoiceStatus): string {
   switch (status) {
-    case InvoiceStatus.DRAFT:
-      return "Brouillon";
     case InvoiceStatus.PENDING:
       return "En attente";
     case InvoiceStatus.APPROVED:
       return "Approuvée";
     case InvoiceStatus.REJECTED:
       return "Rejetée";
-    case InvoiceStatus.PAID:
-      return "Payée";
-    case InvoiceStatus.CANCELLED:
-      return "Annulée";
+    case InvoiceStatus.PROCESSING:
+      return "En cours";
     default:
       return "Inconnu";
   }
