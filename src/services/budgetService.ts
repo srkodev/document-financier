@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Budget, BudgetHistoryEntry } from "@/types";
+import { Budget, BudgetCategory, BudgetHistoryEntry } from "@/types";
+import { Json } from "@/integrations/supabase/types";
 
 // Fonction pour récupérer le budget actuel
 export const fetchBudget = async (): Promise<Budget> => {
@@ -39,6 +40,9 @@ export const fetchBudget = async (): Promise<Budget> => {
 
 // Fonction pour mettre à jour le budget
 export const updateBudget = async (budget: Budget): Promise<Budget> => {
+  // Convertir les catégories en JSON compatible avec Supabase
+  const categoriesJson = convertCategoriesToJson(budget.categories || {});
+  
   // Si c'est un nouveau budget (sans ID ou avec ID par défaut)
   if (!budget.id || budget.id === "default") {
     const { data, error } = await supabase
@@ -46,7 +50,7 @@ export const updateBudget = async (budget: Budget): Promise<Budget> => {
       .insert({
         total_available: budget.totalAvailable,
         total_spent: budget.totalSpent,
-        categories: budget.categories,
+        categories: categoriesJson,
       })
       .select()
       .single();
@@ -61,7 +65,7 @@ export const updateBudget = async (budget: Budget): Promise<Budget> => {
       .update({
         total_available: budget.totalAvailable,
         total_spent: budget.totalSpent,
-        categories: budget.categories,
+        categories: categoriesJson,
         updated_at: new Date().toISOString(),
       })
       .eq("id", budget.id)
@@ -71,6 +75,23 @@ export const updateBudget = async (budget: Budget): Promise<Budget> => {
     if (error) throw new Error(error.message);
     return mapToBudget(data);
   }
+};
+
+// Convertit les catégories de budget en format JSON compatible avec Supabase
+const convertCategoriesToJson = (categories: Record<string, BudgetCategory>): Json => {
+  // Créer un objet simple qui peut être sérialisé en JSON
+  const jsonCategories: Record<string, any> = {};
+  
+  Object.entries(categories).forEach(([key, category]) => {
+    jsonCategories[key] = {
+      allocated: category.allocated,
+      spent: category.spent,
+      description: category.description || '',
+      lastUpdated: category.lastUpdated || new Date().toISOString()
+    };
+  });
+  
+  return jsonCategories as Json;
 };
 
 // Fonction pour récupérer l'historique des modifications du budget
@@ -110,11 +131,25 @@ export const saveBudgetHistoryEntry = async (description: string, details: strin
 
 // Fonction utilitaire pour convertir les données de la base en objet Budget
 const mapToBudget = (data: any): Budget => {
+  // Convertir les catégories JSON en objets BudgetCategory
+  const categories: Record<string, BudgetCategory> = {};
+  
+  if (data.categories) {
+    Object.entries(data.categories as Record<string, any>).forEach(([key, value]) => {
+      categories[key] = {
+        allocated: value.allocated || 0,
+        spent: value.spent || 0,
+        description: value.description || '',
+        lastUpdated: value.lastUpdated || new Date().toISOString()
+      };
+    });
+  }
+  
   return {
     id: data.id,
     totalAvailable: data.total_available,
     totalSpent: data.total_spent,
-    categories: data.categories || {},
+    categories: categories,
     fiscalYear: data.fiscal_year,
     createdAt: data.created_at,
     updatedAt: data.updated_at

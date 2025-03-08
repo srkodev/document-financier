@@ -98,3 +98,27 @@ export interface Profile {
   created_at: string;
   updated_at: string;
 }
+
+// Article Interface (pour la création de factures)
+export interface Article {
+  id: string;
+  name: string;
+  description?: string;
+  priceHT: number;
+  vatRate: number;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+}
+
+// Reimbursement Request Interface
+export interface ReimbursementRequest {
+  id: string;
+  invoice_id: string;
+  user_id: string;
+  amount: number;
+  status: "pending" | "approved" | "rejected";
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
