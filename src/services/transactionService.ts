@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Transaction } from "@/types";
+import { Transaction, TransactionStatus } from "@/types";
 
 // Fetch all transactions
 export const fetchTransactions = async (): Promise<Transaction[]> => {
@@ -15,7 +15,11 @@ export const fetchTransactions = async (): Promise<Transaction[]> => {
       throw error;
     }
 
-    return data || [];
+    // Convert string status to enum
+    return (data || []).map(item => ({
+      ...item,
+      status: item.status as TransactionStatus
+    }));
   } catch (error) {
     console.error("Error in fetchTransactions:", error);
     throw error;
@@ -38,7 +42,10 @@ export const createTransaction = async (
       throw error;
     }
 
-    return data as Transaction;
+    return {
+      ...data,
+      status: data.status as TransactionStatus
+    } as Transaction;
   } catch (error) {
     console.error("Error in createTransaction:", error);
     throw error;
@@ -59,7 +66,10 @@ export const getTransactionById = async (id: string): Promise<Transaction | null
       return null;
     }
 
-    return data as Transaction;
+    return {
+      ...data,
+      status: data.status as TransactionStatus
+    } as Transaction;
   } catch (error) {
     console.error("Error in getTransactionById:", error);
     return null;
@@ -84,7 +94,10 @@ export const updateTransaction = async (
       throw error;
     }
 
-    return data as Transaction;
+    return {
+      ...data,
+      status: data.status as TransactionStatus
+    } as Transaction;
   } catch (error) {
     console.error("Error in updateTransaction:", error);
     throw error;
@@ -129,7 +142,11 @@ export const getTransactionsSummary = async (): Promise<{
       throw error;
     }
 
-    const transactions = data as Transaction[];
+    const transactions = (data || []).map(item => ({
+      ...item, 
+      status: item.status as TransactionStatus
+    })) as Transaction[];
+    
     const totalAmount = transactions.reduce(
       (sum, transaction) => sum + parseFloat(transaction.amount.toString()),
       0

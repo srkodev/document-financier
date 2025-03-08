@@ -35,7 +35,7 @@ const statusConfig = {
     color: "bg-gray-500 text-white",
     label: "Brouillon"
   },
-  // Transaction statuses
+  // Transaction statuses - using different keys to avoid duplicates
   [TransactionStatus.PENDING]: {
     color: "bg-status-pending text-white",
     label: "En attente"

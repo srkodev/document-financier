@@ -44,6 +44,28 @@ const fetchCategories = async () => {
   return data.map(cat => cat.name) || [];
 };
 
+// Create a temporary invoice to link with the reimbursement
+const createTemporaryInvoice = async (userId: string, amount: number, description: string, category: string) => {
+  const invoiceNumber = `TEMP-${Date.now().toString().substring(6)}`;
+  
+  const { data, error } = await supabase
+    .from("invoices")
+    .insert({
+      number: invoiceNumber,
+      amount: amount,
+      description: `Temporary invoice for reimbursement: ${description}`,
+      status: "pending",
+      user_id: userId,
+      category: category
+    })
+    .select()
+    .single();
+    
+  if (error) throw error;
+  
+  return data.id;
+};
+
 const ReimbursementForm: React.FC<ReimbursementFormProps> = ({ 
   open, 
   onOpenChange, 
@@ -99,14 +121,22 @@ const ReimbursementForm: React.FC<ReimbursementFormProps> = ({
     
     setLoading(true);
     try {
-      // 1. Créer la demande de remboursement
+      // 1. First create a temporary invoice to link with the reimbursement
+      const invoiceId = await createTemporaryInvoice(
+        user.id, 
+        values.amount, 
+        values.description,
+        values.category
+      );
+      
+      // 2. Create the reimbursement request
       const { data: request, error: requestError } = await supabase
         .from("reimbursement_requests")
         .insert({
           user_id: user.id,
+          invoice_id: invoiceId,
           amount: values.amount,
           description: values.description,
-          category: values.category,
           status: "pending"
         })
         .select()
@@ -114,7 +144,7 @@ const ReimbursementForm: React.FC<ReimbursementFormProps> = ({
       
       if (requestError) throw requestError;
       
-      // 2. Upload des fichiers justificatifs
+      // 3. Upload files
       const attachments = [];
       
       for (const file of files) {
@@ -137,11 +167,12 @@ const ReimbursementForm: React.FC<ReimbursementFormProps> = ({
           reimbursement_id: request.id,
           file_name: file.name,
           file_type: file.type,
+          file_path: filePath,
           file_url: urlData.publicUrl
         });
       }
       
-      // 3. Enregistrer les liens vers les fichiers
+      // 4. Save file references
       if (attachments.length > 0) {
         const { error: attachError } = await supabase
           .from("reimbursement_attachments")

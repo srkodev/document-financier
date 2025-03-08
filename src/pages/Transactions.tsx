@@ -47,13 +47,15 @@ const Transactions = () => {
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
     queryKey: ['transactions'],
     queryFn: fetchTransactions,
-    onError: (error) => {
-      console.error("Error loading transactions:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load transactions data",
-        variant: "destructive",
-      });
+    meta: {
+      onError: (error: Error) => {
+        console.error("Error loading transactions:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load transactions data",
+          variant: "destructive",
+        });
+      }
     }
   });
 
@@ -61,13 +63,15 @@ const Transactions = () => {
   const { data: categoriesData = [], isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories'],
     queryFn: fetchCategories,
-    onError: (error) => {
-      console.error("Error loading categories:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load categories",
-        variant: "destructive",
-      });
+    meta: {
+      onError: (error: Error) => {
+        console.error("Error loading categories:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load categories",
+          variant: "destructive",
+        });
+      }
     }
   });
 

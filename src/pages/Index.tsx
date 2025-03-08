@@ -18,13 +18,15 @@ const Index = () => {
   const { data: budgetData, isLoading: budgetLoading } = useQuery({
     queryKey: ['budget'],
     queryFn: fetchBudget,
-    onError: (error) => {
-      console.error("Error loading budget data:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les données du budget",
-        variant: "destructive",
-      });
+    meta: {
+      onError: (error: Error) => {
+        console.error("Error loading budget data:", error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de charger les données du budget",
+          variant: "destructive",
+        });
+      }
     }
   });
 
@@ -32,13 +34,15 @@ const Index = () => {
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery({
     queryKey: ['transactions'],
     queryFn: fetchTransactions,
-    onError: (error) => {
-      console.error("Error loading transactions:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les transactions",
-        variant: "destructive",
-      });
+    meta: {
+      onError: (error: Error) => {
+        console.error("Error loading transactions:", error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de charger les transactions",
+          variant: "destructive",
+        });
+      }
     }
   });
 
@@ -46,13 +50,15 @@ const Index = () => {
   const { data: allInvoices = [], isLoading: allInvoicesLoading } = useQuery({
     queryKey: ['invoices', 'all'],
     queryFn: () => fetchInvoices(),
-    onError: (error) => {
-      console.error("Error loading invoices:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les factures",
-        variant: "destructive",
-      });
+    meta: {
+      onError: (error: Error) => {
+        console.error("Error loading invoices:", error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de charger les factures",
+          variant: "destructive",
+        });
+      }
     }
   });
 
@@ -60,13 +66,15 @@ const Index = () => {
   const { data: pendingInvoices = [], isLoading: pendingInvoicesLoading } = useQuery({
     queryKey: ['invoices', 'pending'],
     queryFn: () => fetchInvoices(InvoiceStatus.PENDING),
-    onError: (error) => {
-      console.error("Error loading pending invoices:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les factures en attente",
-        variant: "destructive",
-      });
+    meta: {
+      onError: (error: Error) => {
+        console.error("Error loading pending invoices:", error);
+        toast({
+          title: "Erreur",
+          description: "Impossible de charger les factures en attente",
+          variant: "destructive",
+        });
+      }
     }
   });
 
