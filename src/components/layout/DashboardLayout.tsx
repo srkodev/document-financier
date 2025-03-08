@@ -12,11 +12,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-background">
       <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
-      <main className="pt-16 md:pl-64 transition-all duration-300 min-h-screen">
+      <main className="flex-1 overflow-auto pt-16 md:pl-64 transition-all duration-300">
         <div className="container mx-auto p-4 md:p-6 max-w-7xl">
           {children}
         </div>

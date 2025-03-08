@@ -93,8 +93,9 @@ const Sidebar: React.FC<SidebarProps> = ({ className, isOpen, onClose }) => {
   return (
     <aside
       className={cn(
-        'bg-background border-r border-border h-screen p-4 w-64 flex flex-col',
-        isOpen ? 'fixed inset-y-0 left-0 z-50' : 'hidden md:flex',
+        'h-screen fixed z-40 top-0 left-0 pt-16 bg-background border-r border-border p-4 w-64 flex flex-col',
+        isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        'transition-transform duration-300 ease-in-out',
         className
       )}
     >
@@ -102,7 +103,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className, isOpen, onClose }) => {
         <Receipt className="h-6 w-6 text-primary mr-2" />
         <h1 className="text-xl font-bold">Budget App</h1>
       </div>
-      <nav className="space-y-1 flex-1">
+      <nav className="space-y-1 flex-1 overflow-y-auto">
         {filteredNavItems.map((item) => (
           <NavLink
             key={item.href}
