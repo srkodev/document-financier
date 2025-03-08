@@ -1,13 +1,12 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { TransactionStatus } from "@/types";
-import { updateBudgetAfterTransaction } from "@/services/budgetService";
 
 export interface ReimbursementRequestForm {
   invoiceId: string;
   amount: number;
   description: string;
-  category?: string; // Ajout du champ category optionnel
+  category?: string;
 }
 
 export interface ReimbursementAttachment {
@@ -19,7 +18,6 @@ export interface ReimbursementAttachment {
   created_at: string;
 }
 
-// Mise à jour de l'interface pour inclure category
 export interface ReimbursementRequest {
   id: string;
   invoice_id: string;
@@ -29,7 +27,7 @@ export interface ReimbursementRequest {
   user_id: string;
   created_at: string;
   updated_at: string;
-  category?: string; // Ajout du champ category optionnel
+  category?: string;
 }
 
 export const createReimbursementRequest = async (
@@ -101,19 +99,79 @@ export const getReimbursementAttachments = async (reimbursementId: string): Prom
   return data as ReimbursementAttachment[];
 };
 
+// Mise à jour du budget après une transaction
+const updateBudgetAfterTransaction = async (transaction: {
+  amount: number;
+  category: string;
+  description: string;
+  date: string;
+  status: TransactionStatus;
+  id: string;
+}) => {
+  // Récupérer le budget actuel
+  const { data: budgetData, error: budgetError } = await supabase
+    .from("budgets")
+    .select("*")
+    .limit(1)
+    .single();
+
+  if (budgetError) throw budgetError;
+
+  // Mettre à jour le montant dépensé
+  const budget = budgetData;
+  const updatedBudget = { ...budget };
+
+  // Mise à jour du total dépensé
+  updatedBudget.total_spent = Number(budget.total_spent) + Number(transaction.amount);
+
+  // Mise à jour de la catégorie si elle existe
+  if (transaction.category && budget.categories && budget.categories[transaction.category]) {
+    const categoryBudget = budget.categories[transaction.category];
+    categoryBudget.spent = Number(categoryBudget.spent) + Number(transaction.amount);
+    categoryBudget.lastUpdated = new Date().toISOString();
+    updatedBudget.categories[transaction.category] = categoryBudget;
+  }
+
+  // Enregistrer les modifications
+  const { error: updateError } = await supabase
+    .from("budgets")
+    .update(updatedBudget)
+    .eq("id", budget.id);
+
+  if (updateError) throw updateError;
+
+  // Enregistrer l'historique de la modification
+  const { error: historyError } = await supabase
+    .from("budget_history")
+    .insert({
+      action: "transaction_created",
+      details: JSON.stringify({
+        transaction_id: transaction.id,
+        amount: transaction.amount,
+        category: transaction.category,
+        description: transaction.description
+      }),
+      user_id: "system" // Remplacer par l'ID de l'utilisateur actuel si disponible
+    });
+
+  if (historyError) throw historyError;
+
+  return updatedBudget;
+};
+
 export const approveReimbursementRequest = async (requestId: string) => {
   // 1. Obtenir les détails de la demande de remboursement
   const { data: request, error: requestError } = await supabase
     .from("reimbursement_requests")
     .update({ status: "approved", updated_at: new Date().toISOString() })
     .eq("id", requestId)
-    .select()
+    .select("*, category")
     .single();
 
   if (requestError) throw requestError;
 
   // 2. Créer une transaction pour le remboursement
-  const { error: transactionError } = await supabase
+  const { data: transactionData, error: transactionError } = await supabase
     .from("transactions")
     .insert({
       amount: request.amount,
@@ -121,7 +179,9 @@ export const approveReimbursementRequest = async (requestId: string) => {
       status: TransactionStatus.COMPLETED,
       date: new Date().toISOString(),
       category: request.category || "Remboursement" // Utiliser la catégorie de la demande ou "Remboursement" par défaut
-    });
+    })
+    .select()
+    .single();
 
   if (transactionError) throw transactionError;
 
@@ -132,7 +192,7 @@ export const approveReimbursementRequest = async (requestId: string) => {
     date: new Date().toISOString(),
     description: `Remboursement: ${request.description}`,
     status: TransactionStatus.COMPLETED,
-    id: crypto.randomUUID()
+    id: transactionData.id
   });
 
   return request;
