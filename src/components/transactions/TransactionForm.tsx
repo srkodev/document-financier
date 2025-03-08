@@ -7,7 +7,6 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
@@ -89,14 +88,13 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ transactionId }) => {
         // Format the date to a Date object
         const formattedDate = new Date(data.date);
 
-        form.setValue({
-          description: data.description,
-          amount: String(data.amount),
-          category: data.category || "",
-          date: formattedDate,
-          status: data.status,
-          invoiceId: data.invoice_id || "",
-        });
+        // Fix: Use setValue on each field individually instead of passing an object
+        form.setValue("description", data.description);
+        form.setValue("amount", String(data.amount));
+        form.setValue("category", data.category || "");
+        form.setValue("date", formattedDate);
+        form.setValue("status", data.status);
+        form.setValue("invoiceId", data.invoice_id || "");
       }
     } catch (error: any) {
       toast({
