@@ -27,23 +27,28 @@ const statusConfig = {
     color: "bg-gray-500 text-white",
     label: "Brouillon"
   },
-  // Transaction statuses
-  [TransactionStatus.PENDING]: {
+  // Transaction statuses - using unique identifiers
+  [`transaction_${TransactionStatus.PENDING}`]: {
     color: "bg-status-pending text-white",
     label: "En attente"
   },
-  [TransactionStatus.COMPLETED]: {
+  [`transaction_${TransactionStatus.COMPLETED}`]: {
     color: "bg-status-approved text-white",
     label: "Terminé"
   },
-  [TransactionStatus.CANCELLED]: {
+  [`transaction_${TransactionStatus.CANCELLED}`]: {
     color: "bg-status-rejected text-white",
     label: "Annulé"
   }
 };
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className }) => {
-  const config = statusConfig[status as keyof typeof statusConfig] || {
+  // Check if it's a transaction status and use the appropriate key
+  const configKey = Object.values(TransactionStatus).includes(status as TransactionStatus)
+    ? `transaction_${status}`
+    : status;
+    
+  const config = statusConfig[configKey as keyof typeof statusConfig] || {
     color: "bg-gray-500 text-white",
     label: status
   };

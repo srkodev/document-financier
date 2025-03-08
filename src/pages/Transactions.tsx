@@ -39,7 +39,7 @@ const Transactions = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -111,6 +111,7 @@ const Transactions = () => {
       const matchesCategory = categoryFilter === "" || 
         transaction.category === categoryFilter;
       
+      // Fixed type error by explicitly type casting
       const matchesStatus = statusFilter === "" || 
         transaction.status === statusFilter as TransactionStatus;
       
@@ -153,7 +154,7 @@ const Transactions = () => {
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value="all-categories">All Categories</SelectItem>
                   {categories.map((category: string) => (
                     <SelectItem key={category} value={category}>{category}</SelectItem>
                   ))}
@@ -166,7 +167,7 @@ const Transactions = () => {
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all-statuses">All Statuses</SelectItem>
                   <SelectItem value={TransactionStatus.PENDING}>Pending</SelectItem>
                   <SelectItem value={TransactionStatus.COMPLETED}>Completed</SelectItem>
                   <SelectItem value={TransactionStatus.CANCELLED}>Cancelled</SelectItem>
