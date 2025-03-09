@@ -1,6 +1,90 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { TransactionStatus } from "@/types";
+import { Budget, BudgetHistoryEntry, TransactionStatus } from "@/types";
+
+// Fetch the current budget
+export const fetchBudget = async (): Promise<Budget> => {
+  const { data, error } = await supabase
+    .from("budgets")
+    .select("*")
+    .limit(1)
+    .single();
+
+  if (error) throw error;
+
+  return data as Budget;
+};
+
+// Update budget in the database
+export const updateBudget = async (budget: Budget): Promise<Budget> => {
+  const { data, error } = await supabase
+    .from("budgets")
+    .update({
+      total_available: budget.total_available,
+      total_spent: budget.total_spent,
+      categories: budget.categories,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", budget.id)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return data as Budget;
+};
+
+// Save an entry in the budget history
+export const saveBudgetHistoryEntry = async (
+  action: string,
+  details: string,
+  userId: string = "system"
+): Promise<void> => {
+  const { error } = await supabase
+    .from("budget_history")
+    .insert({
+      action,
+      details,
+      user_id: userId
+    });
+
+  if (error) throw error;
+};
+
+// Fetch budget history entries
+export const fetchBudgetHistory = async (): Promise<BudgetHistoryEntry[]> => {
+  const { data, error } = await supabase
+    .from("budget_history")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  // Try to get user names for each entry
+  const historyWithUserNames = await Promise.all(
+    data.map(async (entry) => {
+      if (entry.user_id === "system") {
+        return {
+          ...entry,
+          user_name: "Système"
+        };
+      }
+      
+      const { data: userData, error: userError } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", entry.user_id)
+        .maybeSingle();
+
+      return {
+        ...entry,
+        user_name: userData?.name || "Utilisateur"
+      };
+    })
+  );
+
+  return historyWithUserNames as BudgetHistoryEntry[];
+};
 
 // Mise à jour du budget après une transaction
 export const updateBudgetAfterTransaction = async (transaction: {
@@ -61,5 +145,3 @@ export const updateBudgetAfterTransaction = async (transaction: {
 
   return updatedBudget;
 };
-
-export * from "@/services/budgetService";
