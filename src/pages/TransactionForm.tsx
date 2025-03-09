@@ -1,37 +1,33 @@
 
 import React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import TransactionFormComponent from "@/components/transactions/TransactionForm";
+import TransactionForm from "@/components/transactions/TransactionForm";
 
-const TransactionForm: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+const TransactionFormPage = () => {
   const navigate = useNavigate();
-  
+  const { id } = useParams();
+
+  const handleSuccess = () => {
+    navigate("/transactions");
+  };
+
   return (
     <DashboardLayout>
-      <div className="container mx-auto py-6 space-y-6">
-        <h1 className="text-3xl font-bold">
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-6">
           {id ? "Modifier la transaction" : "Nouvelle transaction"}
         </h1>
         
-        <Card>
-          <CardHeader>
-            <CardTitle>{id ? "Modifier la transaction" : "Créer une nouvelle transaction"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TransactionFormComponent 
-              transactionId={id} 
-              onSuccess={() => {
-                navigate("/transactions");
-              }}
-            />
-          </CardContent>
-        </Card>
+        <div className="bg-white rounded-lg shadow p-6">
+          <TransactionForm 
+            onSuccess={handleSuccess}
+            transactionId={id}
+          />
+        </div>
       </div>
     </DashboardLayout>
   );
 };
 
-export default TransactionForm;
+export default TransactionFormPage;
