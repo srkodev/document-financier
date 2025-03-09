@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Invoice, InvoiceStatus } from "@/types";
 import { generateInvoicePDF } from "@/services/pdfService";
@@ -49,7 +48,7 @@ export const updateInvoiceStatus = async (id: string, status: InvoiceStatus) => 
 
 export const deleteInvoice = async (id: string) => {
   try {
-    // Vérifier si la facture a un lien vers un fichier PDF
+    // Get invoice data
     const { data: invoice, error: getError } = await supabase
       .from("invoices")
       .select("pdf_url")
@@ -57,66 +56,71 @@ export const deleteInvoice = async (id: string) => {
       .single();
       
     if (getError) {
+      console.error("Error getting invoice:", getError);
       throw new Error(getError.message);
     }
     
-    // Supprimer le fichier PDF si présent
+    // Delete PDF if exists
     if (invoice?.pdf_url) {
-      // Extraire le chemin du fichier à partir de l'URL
-      const url = new URL(invoice.pdf_url);
-      const pathSegments = url.pathname.split('/');
-      // Les deux derniers segments devraient être le bucket et le nom du fichier
-      if (pathSegments.length >= 2) {
-        const filePath = pathSegments[pathSegments.length - 1];
-        
-        // Supprimer le fichier du bucket
-        await supabase.storage
-          .from('invoices')
-          .remove([filePath]);
+      try {
+        const url = new URL(invoice.pdf_url);
+        const pathSegments = url.pathname.split('/');
+        if (pathSegments.length >= 2) {
+          const filePath = pathSegments[pathSegments.length - 1];
+          
+          const { error: deleteFileError } = await supabase.storage
+            .from('invoices')
+            .remove([filePath]);
+            
+          if (deleteFileError) {
+            console.error("Error deleting file:", deleteFileError);
+            // Continue with invoice deletion even if file deletion fails
+          }
+        }
+      } catch (fileError) {
+        console.error("Error processing file URL:", fileError);
+        // Continue with invoice deletion even if there's an issue with the file URL
       }
     }
     
-    // Vérifier s'il existe des remboursements liés à cette facture
-    const { data: reimbursements } = await supabase
-      .from("reimbursement_requests")
-      .select("id")
+    // Update any related records before deletion
+    
+    // 1. Update transactions to remove invoice_id reference
+    const { error: transactionError } = await supabase
+      .from("transactions")
+      .update({ invoice_id: null })
       .eq("invoice_id", id);
       
-    if (reimbursements && reimbursements.length > 0) {
-      // Mettre à jour les remboursements pour les déconnecter de cette facture
-      await supabase
-        .from("reimbursement_requests")
-        .update({ invoice_id: null })
-        .eq("invoice_id", id);
+    if (transactionError) {
+      console.error("Error updating transactions:", transactionError);
+      // Continue anyway to try to delete the invoice
     }
     
-    // Vérifier s'il existe des transactions liées à cette facture
-    const { data: transactions } = await supabase
-      .from("transactions")
-      .select("id")
+    // 2. Update reimbursement requests to remove invoice_id reference
+    const { error: reimbError } = await supabase
+      .from("reimbursement_requests")
+      .update({ invoice_id: null })
       .eq("invoice_id", id);
       
-    if (transactions && transactions.length > 0) {
-      // Mettre à jour les transactions pour les déconnecter de cette facture
-      await supabase
-        .from("transactions")
-        .update({ invoice_id: null })
-        .eq("invoice_id", id);
+    if (reimbError) {
+      console.error("Error updating reimbursements:", reimbError);
+      // Continue anyway to try to delete the invoice
     }
-  
-    // Supprimer la facture elle-même
+    
+    // Finally delete the invoice
     const { error } = await supabase
       .from("invoices")
       .delete()
       .eq("id", id);
 
     if (error) {
+      console.error("Error deleting invoice:", error);
       throw new Error(error.message);
     }
 
     return true;
   } catch (error: any) {
-    console.error("Erreur lors de la suppression de la facture:", error);
+    console.error("Error in deleteInvoice:", error);
     throw error;
   }
 };

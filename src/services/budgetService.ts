@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Budget, BudgetHistoryEntry, TransactionStatus } from "@/types";
+import { Budget, BudgetHistoryEntry, TransactionStatus, BudgetCategory } from "@/types";
 
 // Fetch the current budget
 export const fetchBudget = async (): Promise<Budget> => {
@@ -12,7 +12,18 @@ export const fetchBudget = async (): Promise<Budget> => {
 
   if (error) throw error;
 
-  return data as Budget;
+  // Ensure categories is properly typed
+  const budget: Budget = {
+    id: data.id,
+    total_available: data.total_available,
+    total_spent: data.total_spent,
+    categories: data.categories as { [key: string]: BudgetCategory },
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+    fiscal_year: data.fiscal_year,
+  };
+
+  return budget;
 };
 
 // Update budget in the database
@@ -22,7 +33,7 @@ export const updateBudget = async (budget: Budget): Promise<Budget> => {
     .update({
       total_available: budget.total_available,
       total_spent: budget.total_spent,
-      categories: budget.categories,
+      categories: budget.categories as any, // Cast to any to avoid type issues with JSONB
       updated_at: new Date().toISOString()
     })
     .eq("id", budget.id)
@@ -31,7 +42,18 @@ export const updateBudget = async (budget: Budget): Promise<Budget> => {
 
   if (error) throw error;
 
-  return data as Budget;
+  // Ensure categories is properly typed in the response
+  const updatedBudget: Budget = {
+    id: data.id,
+    total_available: data.total_available,
+    total_spent: data.total_spent,
+    categories: data.categories as { [key: string]: BudgetCategory },
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+    fiscal_year: data.fiscal_year,
+  };
+
+  return updatedBudget;
 };
 
 // Save an entry in the budget history
